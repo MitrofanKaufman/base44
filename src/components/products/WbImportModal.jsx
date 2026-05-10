@@ -5,14 +5,10 @@ import { X, Search, RefreshCw, Package, CheckCircle, AlertCircle } from 'lucide-
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { formatRub } from '@/lib/unitEconomics';
 
-export default function WbImportModal({ 
-  projects = [], 
-  clients = [], 
-  onClose 
-}) {
+export default function WbImportModal({ projects, clients: _clients, onClose }) {
   const qc = useQueryClient();
   const [sku, setSku] = useState('');
   const [projectId, setProjectId] = useState(projects[0]?.id || '');
@@ -24,17 +20,15 @@ export default function WbImportModal({
 
   const searchProduct = async () => {
     if (!sku.trim()) return;
-    
     setLoading(true);
     setError('');
     setPreview(null);
-    
     try {
       // Получаем данные товара через LLM (симуляция WB API)
       const result = await base44.integrations.Core.InvokeLLM({
         prompt: `Получи данные товара Wildberries с артикулом (nmId или vendorCode) "${sku.trim()}".
-        Верни реальные данные с сайта WB: название, цена, фото, категория, комиссия, габариты.
-        Если товар не найден, верни name: null.`,
+Верни реальные данные с сайта WB: название, цена, фото, категория, комиссия, габариты.
+Если товар не найден, верни name: null.`,
         add_context_from_internet: true,
         response_json_schema: {
           type: 'object',
@@ -45,191 +39,134 @@ export default function WbImportModal({
             image_url: { type: 'string' },
             category: { type: 'string' },
             wb_commission_pct: { type: 'number' },
-            dimensions: {
-              type: 'object',
-              properties: {
-                length: { type: 'number' },
-                width: { type: 'number' },
-                height: { type: 'number' },
-                weight: { type: 'number' }
-              }
-            }
+            size_length_cm: { type: 'number' },
+            size_width_cm: { type: 'number' },
+            size_height_cm: { type: 'number' },
+            weight_kg: { type: 'number' },
           }
         }
       });
-
-      if (result.name) {
-        setPreview(result);
+      if (!result.name) {
+        setError('Товар не найден. Проверьте артикул.');
       } else {
-        setError('Товар не найден');
+        setPreview(result);
       }
-    } catch (err) {
-      setError('Ошибка при поиске товара');
-    } finally {
-      setLoading(false);
+    } catch {
+      setError('Ошибка при поиске товара.');
     }
+    setLoading(false);
   };
 
-  const importMut = useMutation({
-    mutationFn: (data) => base44.entities.Product.create(data),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['products'] });
-      onClose();
+  const saveMut = useMutation({
+    mutationFn: () => {
+      const proj = projectMap[projectId];
+      return base44.entities.Product.create({
+        ...preview,
+        wb_sku: sku.trim(),
+        project_id: projectId,
+        client_id: proj?.client_id,
+        last_synced_at: new Date().toISOString(),
+      });
     },
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['products'] }); onClose(); },
   });
 
-  const handleImport = () => {
-    if (!preview || !projectId) return;
-    
-    const productData = {
-      name: preview.name,
-      wb_sku: sku.trim(),
-      price: preview.price,
-      sale_price: preview.sale_price || preview.price,
-      project_id: projectId,
-      category: preview.category,
-      image_url: preview.image_url,
-      wb_commission_pct: preview.wb_commission_pct,
-      dimensions: preview.dimensions,
-    };
-
-    importMut.mutate(productData);
-  };
-
   return (
-    <Dialog open={true} onOpenChange={onClose}>
-      <DialogContent className="max-w-2xl">
-        <DialogHeader>
-          <DialogTitle className="flex items-center gap-2">
-            <Package className="h-5 w-5" />
-            Импорт товара с Wildberries
-          </DialogTitle>
-        </DialogHeader>
+    <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+      <div className="bg-card rounded-2xl border border-border w-full max-w-md shadow-xl">
+        <div className="flex items-center justify-between p-5 border-b border-border">
+          <h2 className="font-semibold">Импорт товара с Wildberries</h2>
+          <button onClick={onClose} className="p-1 rounded hover:bg-muted"><X className="w-4 h-4" /></button>
+        </div>
 
-        <div className="space-y-6">
-          {/* Поиск товара */}
-          <div className="space-y-4">
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label htmlFor="sku">Артикул WB (nmId или vendorCode)</Label>
-                <Input
-                  id="sku"
-                  value={sku}
-                  onChange={(e) => setSku(e.target.value)}
-                  placeholder="12345678"
-                />
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="project">Проект</Label>
-                <select
-                  id="project"
-                  value={projectId}
-                  onChange={(e) => setProjectId(e.target.value)}
-                  className="w-full h-10 rounded-md border border-input bg-background px-3 py-2 text-sm"
-                >
-                  {projects.map((project) => (
-                    <option key={project.id} value={project.id}>
-                      {project.name}
-                    </option>
-                  ))}
-                </select>
-              </div>
-            </div>
-
-            <Button 
-              onClick={searchProduct} 
-              disabled={loading || !sku.trim()}
-              className="w-full"
-            >
-              {loading ? (
-                <>
-                  <RefreshCw className="mr-2 h-4 w-4 animate-spin" />
-                  Поиск...
-                </>
-              ) : (
-                <>
-                  <Search className="mr-2 h-4 w-4" />
-                  Найти товар
-                </>
-              )}
-            </Button>
+        <div className="p-5 space-y-4">
+          <div>
+            <Label>Проект</Label>
+            <Select value={projectId} onValueChange={setProjectId}>
+              <SelectTrigger className="mt-1"><SelectValue placeholder="Выберите проект" /></SelectTrigger>
+              <SelectContent>
+                {projects.map(p => <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>)}
+              </SelectContent>
+            </Select>
           </div>
 
-          {/* Ошибки */}
+          <div>
+            <Label>Артикул WB (nmId или vendorCode)</Label>
+            <div className="flex gap-2 mt-1">
+              <Input
+                value={sku}
+                onChange={e => setSku(e.target.value)}
+                placeholder="123456789"
+                onKeyDown={e => e.key === 'Enter' && searchProduct()}
+                className="font-mono"
+              />
+              <Button onClick={searchProduct} disabled={loading || !sku.trim()} className="gap-2 flex-shrink-0">
+                {loading ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Search className="w-4 h-4" />}
+                Найти
+              </Button>
+            </div>
+          </div>
+
           {error && (
-            <div className="flex items-center gap-2 p-3 bg-red-50 border border-red-200 rounded-md">
-              <AlertCircle className="h-4 w-4 text-red-600" />
-              <span className="text-sm text-red-800">{error}</span>
+            <div className="flex items-center gap-2 text-sm text-destructive bg-destructive/10 rounded-lg p-3">
+              <AlertCircle className="w-4 h-4 flex-shrink-0" />
+              {error}
             </div>
           )}
 
-          {/* Предпросмотр товара */}
           {preview && (
-            <div className="space-y-4">
-              <div className="flex items-center gap-2 p-3 bg-green-50 border border-green-200 rounded-md">
-                <CheckCircle className="h-4 w-4 text-green-600" />
-                <span className="text-sm text-green-800">Товар найден</span>
-              </div>
-
-              <div className="border rounded-lg p-4 space-y-3">
-                <div className="flex gap-4">
-                  {preview.image_url && (
-                    <img 
-                      src={preview.image_url} 
-                      alt={preview.name}
-                      className="w-20 h-20 object-cover rounded-md"
-                    />
-                  )}
-                  <div className="flex-1">
-                    <h3 className="font-medium">{preview.name}</h3>
-                    <p className="text-sm text-muted-foreground">{preview.category}</p>
-                    <div className="flex gap-4 mt-2">
-                      <span className="text-lg font-semibold">{formatRub(preview.price)}</span>
-                      {preview.sale_price && (
-                        <span className="text-sm text-muted-foreground line-through">
-                          {formatRub(preview.sale_price)}
-                        </span>
-                      )}
-                    </div>
-                  </div>
-                </div>
-
-                {preview.wb_commission_pct && (
-                  <div className="text-sm">
-                    <span className="text-muted-foreground">Комиссия WB: </span>
-                    <span className="font-medium">{preview.wb_commission_pct}%</span>
-                  </div>
-                )}
-
-                {preview.dimensions && (
-                  <div className="text-sm">
-                    <span className="text-muted-foreground">Габариты: </span>
-                    <span className="font-medium">
-                      {preview.dimensions.length}×{preview.dimensions.width}×{preview.dimensions.height} см, {preview.dimensions.weight} г
-                    </span>
-                  </div>
-                )}
-              </div>
-
-              <Button 
-                onClick={handleImport} 
-                disabled={importMut.isLoading || !projectId}
-                className="w-full"
-              >
-                {importMut.isLoading ? (
-                  <>
-                    <RefreshCw className="mr-2 h-4 w-4 animate-spin" />
-                    Импорт...
-                  </>
+            <div className="bg-muted/50 rounded-xl border border-border p-4 space-y-3">
+              <div className="flex gap-3">
+                {preview.image_url ? (
+                  <img src={preview.image_url} alt={preview.name} className="w-16 h-16 rounded-lg object-cover flex-shrink-0" />
                 ) : (
-                  'Импортировать товар'
+                  <div className="w-16 h-16 rounded-lg bg-muted flex items-center justify-center flex-shrink-0">
+                    <Package className="w-6 h-6 text-muted-foreground" />
+                  </div>
                 )}
-              </Button>
+                <div>
+                  <h3 className="font-semibold text-sm">{preview.name}</h3>
+                  {preview.category && <p className="text-xs text-muted-foreground">{preview.category}</p>}
+                  {preview.sale_price && <p className="text-sm font-bold text-primary mt-1">{formatRub(preview.sale_price)}</p>}
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-2 text-xs">
+                {preview.wb_commission_pct && (
+                  <div className="bg-card rounded p-2">
+                    <p className="text-muted-foreground">Комиссия WB</p>
+                    <p className="font-semibold">{preview.wb_commission_pct}%</p>
+                  </div>
+                )}
+                {preview.weight_kg && (
+                  <div className="bg-card rounded p-2">
+                    <p className="text-muted-foreground">Вес</p>
+                    <p className="font-semibold">{preview.weight_kg} кг</p>
+                  </div>
+                )}
+                {preview.size_length_cm && (
+                  <div className="bg-card rounded p-2 col-span-2">
+                    <p className="text-muted-foreground">Габариты</p>
+                    <p className="font-semibold">{preview.size_length_cm} × {preview.size_width_cm} × {preview.size_height_cm} см</p>
+                  </div>
+                )}
+              </div>
+
+              <div className="flex items-center gap-1.5 text-xs text-success">
+                <CheckCircle className="w-3.5 h-3.5" />
+                Товар найден, готов к импорту
+              </div>
             </div>
           )}
         </div>
-      </DialogContent>
-    </Dialog>
+
+        <div className="flex gap-3 p-5 border-t border-border">
+          <Button variant="outline" className="flex-1" onClick={onClose}>Отмена</Button>
+          <Button className="flex-1" onClick={() => saveMut.mutate()} disabled={!preview || !projectId || saveMut.isPending}>
+            {saveMut.isPending ? 'Импорт...' : 'Импортировать'}
+          </Button>
+        </div>
+      </div>
+    </div>
   );
 }

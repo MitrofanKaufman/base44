@@ -1,120 +1,115 @@
 import { useState } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { base44 } from '@/api/base44Client';
-import { X, User } from 'lucide-react';
+import { X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 
-export default function ClientModal({ 
-  client = null, 
-  onClose 
-}) {
-  const qc = useQueryClient();
-  const [formData, setFormData] = useState({
-    name: client?.name || '',
-    email: client?.email || '',
-    phone: client?.phone || '',
-    status: client?.status || 'active',
-    // ... другие поля
+const Field = ({ label, children }) => (
+  <div className="space-y-1.5">
+    <Label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">{label}</Label>
+    {children}
+  </div>
+);
+
+export default function ClientModal({ client, onClose }) {
+  const qc     = useQueryClient();
+  const isEdit = !!client;
+
+  const [form, setForm] = useState({
+    name:          client?.name          || '',
+    email:         client?.email         || '',
+    phone:         client?.phone         || '',
+    status:        client?.status        || 'active',
+    wb_api_token:  client?.wb_api_token  || '',
+    notes:         client?.notes         || '',
   });
 
-  const createMut = useMutation({
-    mutationFn: (data) => base44.entities.Client.create(data),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['clients'] });
-      onClose();
-    },
+  const mut = useMutation({
+    mutationFn: (data) => isEdit
+      ? base44.entities.Client.update(client.id, data)
+      : base44.entities.Client.create(data),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['clients'] }); onClose(); },
   });
 
-  const updateMut = useMutation({
-    mutationFn: ({ id, data }) => base44.entities.Client.update(id, data),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['clients'] });
-      onClose();
-    },
-  });
-
-  const handleSubmit = (e) => {
-    e.preventDefault();
-    if (client?.id) {
-      updateMut.mutate({ id: client.id, data: formData });
-    } else {
-      createMut.mutate(formData);
-    }
-  };
-
-  const isSubmitting = createMut.isLoading || updateMut.isLoading;
+  const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
 
   return (
-    <Dialog open={true} onOpenChange={onClose}>
-      <DialogContent className="max-w-md">
-        <DialogHeader>
-          <DialogTitle className="flex items-center gap-2">
-            <User className="h-5 w-5" />
-            {client?.id ? 'Редактировать клиента' : 'Новый клиент'}
-          </DialogTitle>
-        </DialogHeader>
+    <div className="fixed inset-0 bg-black/30 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+      <div className="bg-card rounded-lg border border-border w-full max-w-md shadow-warm-lg">
 
-        <form onSubmit={handleSubmit} className="space-y-6">
-          <div className="space-y-2">
-            <Label htmlFor="name">Название клиента</Label>
+        {/* Header */}
+        <div className="flex items-center justify-between px-6 py-4 border-b border-border">
+          <h2 className="font-semibold text-[15px]">{isEdit ? 'Редактировать клиента' : 'Новый клиент'}</h2>
+          <button onClick={onClose} className="p-1.5 rounded-md hover:bg-muted transition-colors">
+            <X className="w-4 h-4 text-muted-foreground" />
+          </button>
+        </div>
+
+        {/* Body */}
+        <div className="px-6 py-5 space-y-4">
+          <Field label="Название / Имя *">
             <Input
-              id="name"
-              value={formData.name}
-              onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+              className="rounded-md"
+              value={form.name}
+              onChange={e => set('name', e.target.value)}
               placeholder="ООО Ромашка"
-              required
             />
+          </Field>
+
+          <div className="grid grid-cols-2 gap-3">
+            <Field label="Email">
+              <Input className="rounded-md" type="email" value={form.email} onChange={e => set('email', e.target.value)} placeholder="client@email.com" />
+            </Field>
+            <Field label="Телефон">
+              <Input className="rounded-md" value={form.phone} onChange={e => set('phone', e.target.value)} placeholder="+7 999 000 00 00" />
+            </Field>
           </div>
 
-          <div className="space-y-2">
-            <Label htmlFor="email">Email</Label>
+          <Field label="Статус">
+            <Select value={form.status} onValueChange={v => set('status', v)}>
+              <SelectTrigger className="rounded-md"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="active">Активен</SelectItem>
+                <SelectItem value="trial">Пробный период</SelectItem>
+                <SelectItem value="inactive">Неактивен</SelectItem>
+              </SelectContent>
+            </Select>
+          </Field>
+
+          <Field label="WB API Token (статистика)">
             <Input
-              id="email"
-              type="email"
-              value={formData.email}
-              onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-              placeholder="client@example.com"
-              required
+              className="rounded-md font-mono text-xs"
+              value={form.wb_api_token}
+              onChange={e => set('wb_api_token', e.target.value)}
+              placeholder="eyJhbGci..."
             />
-          </div>
+          </Field>
 
-          <div className="space-y-2">
-            <Label htmlFor="phone">Телефон</Label>
-            <Input
-              id="phone"
-              value={formData.phone}
-              onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
-              placeholder="+7 (999) 123-45-67"
+          <Field label="Заметки">
+            <textarea
+              className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm resize-none h-20 focus:outline-none focus:ring-1 focus:ring-ring"
+              value={form.notes}
+              onChange={e => set('notes', e.target.value)}
+              placeholder="Дополнительная информация..."
             />
-          </div>
+          </Field>
+        </div>
 
-          <div className="space-y-2">
-            <Label htmlFor="status">Статус</Label>
-            <select
-              id="status"
-              value={formData.status}
-              onChange={(e) => setFormData({ ...formData, status: e.target.value })}
-              className="w-full h-10 rounded-md border border-input bg-background px-3 py-2 text-sm"
-            >
-              <option value="active">Активен</option>
-              <option value="trial">Пробный период</option>
-              <option value="inactive">Неактивен</option>
-            </select>
-          </div>
-
-          <div className="flex justify-end gap-3 pt-4">
-            <Button type="button" variant="outline" onClick={onClose}>
-              Отмена
-            </Button>
-            <Button type="submit" disabled={isSubmitting}>
-              {isSubmitting ? 'Сохранение...' : client?.id ? 'Сохранить' : 'Создать'}
-            </Button>
-          </div>
-        </form>
-      </DialogContent>
-    </Dialog>
+        {/* Footer */}
+        <div className="flex gap-3 px-6 py-4 border-t border-border">
+          <Button variant="outline" className="flex-1 rounded-md" onClick={onClose}>Отмена</Button>
+          <Button
+            className="flex-1 rounded-md"
+            onClick={() => mut.mutate(form)}
+            disabled={!form.name || mut.isPending}
+          >
+            {mut.isPending ? 'Сохранение...' : isEdit ? 'Сохранить' : 'Создать'}
+          </Button>
+        </div>
+      </div>
+    </div>
   );
 }

@@ -1,0 +1,178 @@
+{
+  "name": "IngestionRun",
+  "type": "object",
+  "properties": {
+    "runId": {
+      "type": "string",
+      "description": "\u0423\u043d\u0438\u043a\u0430\u043b\u044c\u043d\u044b\u0439 \u0438\u0434\u0435\u043d\u0442\u0438\u0444\u0438\u043a\u0430\u0442\u043e\u0440 \u043f\u0440\u043e\u0433\u043e\u043d\u0430"
+    },
+    "source": {
+      "type": "string",
+      "enum": [
+        "wildberries",
+        "yandex",
+        "ozon"
+      ],
+      "description": "\u0418\u0441\u0442\u043e\u0447\u043d\u0438\u043a \u0434\u0430\u043d\u043d\u044b\u0445"
+    },
+    "sourceMode": {
+      "type": "string",
+      "enum": [
+        "real",
+        "mock",
+        "fallback"
+      ],
+      "default": "real",
+      "description": "\u0421\u043f\u043e\u0441\u043e\u0431 \u0441\u0431\u043e\u0440\u0430: \u0440\u0435\u0430\u043b\u044c\u043d\u044b\u0435 \u0434\u0430\u043d\u043d\u044b\u0435, mock \u0438\u043b\u0438 fallback"
+    },
+    "mode": {
+      "type": "string",
+      "enum": [
+        "product",
+        "seller",
+        "full"
+      ],
+      "default": "product",
+      "description": "\u0420\u0435\u0436\u0438\u043c \u043f\u0440\u043e\u0433\u043e\u043d\u0430"
+    },
+    "stream": {
+      "type": "string",
+      "description": "\u041f\u043e\u0442\u043e\u043a \u043e\u0431\u0440\u0430\u0431\u043e\u0442\u043a\u0438 (product, seller \u0438 \u0442.\u0434.)"
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "queued",
+        "running",
+        "completed",
+        "failed",
+        "cancelled",
+        "partial"
+      ],
+      "default": "queued",
+      "description": "\u0421\u0442\u0430\u0442\u0443\u0441 \u043f\u0440\u043e\u0433\u043e\u043d\u0430"
+    },
+    "progress": {
+      "type": "number",
+      "description": "\u041f\u0440\u043e\u0433\u0440\u0435\u0441\u0441 \u0432 \u043f\u0440\u043e\u0446\u0435\u043d\u0442\u0430\u0445 (0-100)",
+      "default": 0
+    },
+    "currentStage": {
+      "type": "string",
+      "description": "\u0422\u0435\u043a\u0443\u0449\u0438\u0439 \u044d\u0442\u0430\u043f pipeline",
+      "enum": [
+        "validate-input",
+        "collect-marketplace-data",
+        "normalize-events",
+        "save-raw-frames",
+        "save-events",
+        "update-snapshots",
+        "calculate-unit-economics",
+        "verify-results",
+        "build-report"
+      ]
+    },
+    "request": {
+      "type": "object",
+      "description": "\u041e\u0440\u0438\u0433\u0438\u043d\u0430\u043b\u044c\u043d\u044b\u0439 RunCollectionRequest"
+    },
+    "counters": {
+      "type": "object",
+      "description": "\u0421\u0447\u0435\u0442\u0447\u0438\u043a\u0438 \u0441\u0443\u0449\u043d\u043e\u0441\u0442\u0435\u0439",
+      "properties": {
+        "eventsProcessed": {
+          "type": "number"
+        },
+        "eventsError": {
+          "type": "number"
+        },
+        "rawFrameCount": {
+          "type": "number"
+        },
+        "eventCount": {
+          "type": "number"
+        },
+        "productSnapshotCount": {
+          "type": "number"
+        },
+        "sellerSnapshotCount": {
+          "type": "number"
+        },
+        "unitEconomicsCount": {
+          "type": "number"
+        },
+        "deadLetterCount": {
+          "type": "number"
+        }
+      }
+    },
+    "timeline": {
+      "type": "array",
+      "description": "\u042d\u0442\u0430\u043f\u044b \u0432\u044b\u043f\u043e\u043b\u043d\u0435\u043d\u0438\u044f",
+      "items": {
+        "type": "object",
+        "properties": {
+          "stage": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "pending",
+              "running",
+              "completed",
+              "failed"
+            ]
+          },
+          "startedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "finishedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "durationMs": {
+            "type": "number"
+          },
+          "error": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "errors": {
+      "type": "array",
+      "description": "\u0421\u043f\u0438\u0441\u043e\u043a \u043e\u0448\u0438\u0431\u043e\u043a \u043f\u0440\u043e\u0433\u043e\u043d\u0430",
+      "items": {
+        "type": "object"
+      }
+    },
+    "report": {
+      "type": "object",
+      "description": "\u0424\u0438\u043d\u0430\u043b\u044c\u043d\u044b\u0439 \u043e\u0442\u0447\u0435\u0442 \u043f\u0440\u043e\u0433\u043e\u043d\u0430"
+    },
+    "startedAt": {
+      "type": "string",
+      "format": "date-time",
+      "description": "\u0412\u0440\u0435\u043c\u044f \u043d\u0430\u0447\u0430\u043b\u0430 \u043f\u0440\u043e\u0433\u043e\u043d\u0430"
+    },
+    "finishedAt": {
+      "type": "string",
+      "format": "date-time",
+      "description": "\u0412\u0440\u0435\u043c\u044f \u043e\u043a\u043e\u043d\u0447\u0430\u043d\u0438\u044f \u043f\u0440\u043e\u0433\u043e\u043d\u0430"
+    },
+    "durationMs": {
+      "type": "number",
+      "description": "\u0414\u043b\u0438\u0442\u0435\u043b\u044c\u043d\u043e\u0441\u0442\u044c \u0432 \u043c\u0438\u043b\u043b\u0438\u0441\u0435\u043a\u0443\u043d\u0434\u0430\u0445"
+    },
+    "notes": {
+      "type": "string",
+      "description": "\u0417\u0430\u043c\u0435\u0442\u043a\u0438 \u043e \u043f\u0440\u043e\u0433\u043e\u043d\u0435"
+    }
+  },
+  "required": [
+    "source",
+    "status"
+  ]
+}

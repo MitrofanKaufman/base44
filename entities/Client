@@ -1,0 +1,42 @@
+{
+  "name": "Client",
+  "type": "object",
+  "properties": {
+    "name": {
+      "type": "string",
+      "description": "\u041d\u0430\u0437\u0432\u0430\u043d\u0438\u0435 \u043a\u043b\u0438\u0435\u043d\u0442\u0430 / \u043a\u043e\u043c\u043f\u0430\u043d\u0438\u0438"
+    },
+    "email": {
+      "type": "string",
+      "description": "Email \u043a\u043b\u0438\u0435\u043d\u0442\u0430"
+    },
+    "phone": {
+      "type": "string",
+      "description": "\u0422\u0435\u043b\u0435\u0444\u043e\u043d"
+    },
+    "wb_api_token": {
+      "type": "string",
+      "description": "API \u0442\u043e\u043a\u0435\u043d Wildberries (\u0441\u0442\u0430\u0442\u0438\u0441\u0442\u0438\u043a\u0430)"
+    },
+    "wb_api_token_ads": {
+      "type": "string",
+      "description": "API \u0442\u043e\u043a\u0435\u043d WB (\u0440\u0435\u043a\u043b\u0430\u043c\u0430)"
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "active",
+        "inactive",
+        "trial"
+      ],
+      "default": "active"
+    },
+    "notes": {
+      "type": "string",
+      "description": "\u0417\u0430\u043c\u0435\u0442\u043a\u0438"
+    }
+  },
+  "required": [
+    "name"
+  ]
+}

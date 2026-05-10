@@ -1,7 +1,152 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import { base44 } from '@/api/base44Client';
+import { BackgroundSyncService } from '@/lib/BackgroundSyncService';
+import { initializeSubscriptions } from '@/lib/initSubscriptions';
 
 const AuthContext = createContext();
+
+function isAdminUser(user) {
+  return ['admin', 'administrator', 'owner'].includes(user?.role);
+}
+
+function replaceBrowserPath(path) {
+  if (typeof window === 'undefined') return;
+  window.history.replaceState({}, document.title, path);
+  window.dispatchEvent(new Event('popstate'));
+}
+
+export const AuthProvider = ({ children }) => {
+  const [user, setUser] = useState(null);
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [isLoadingAuth, setIsLoadingAuth] = useState(true);
+  const [authError, setAuthError] = useState(null);
+  const [authChecked, setAuthChecked] = useState(false);
+  const [appPublicSettings] = useState(null);
+
+  const applyAuthenticatedUser = useCallback((currentUser) => {
+    setUser(currentUser);
+    setIsAuthenticated(true);
+    setAuthError(null);
+    setAuthChecked(true);
+    setIsLoadingAuth(false);
+
+    BackgroundSyncService.stop();
+    BackgroundSyncService.start();
+
+    if (isAdminUser(currentUser)) {
+      initializeSubscriptions().catch((error) => {
+        console.error('Subscription initialization failed:', error);
+      });
+    }
+  }, []);
+
+  const checkUserAuth = useCallback(async ({ silent = false } = {}) => {
+    if (!silent) {
+      setIsLoadingAuth(true);
+    }
+
+    try {
+      const currentUser = await base44.auth.me();
+      applyAuthenticatedUser(currentUser);
+      return currentUser;
+    } catch (error) {
+      setUser(null);
+      setIsAuthenticated(false);
+      setAuthChecked(true);
+      setAuthError({
+        type: 'auth_required',
+        message: error?.status === 401
+          ? 'Сессия истекла. Войдите заново.'
+          : error?.message || 'Требуется авторизация',
+      });
+      setIsLoadingAuth(false);
+      BackgroundSyncService.stop();
+      return null;
+    }
+  }, [applyAuthenticatedUser]);
+
+  useEffect(() => {
+    checkUserAuth({ silent: true });
+
+    return () => {
+      BackgroundSyncService.stop();
+    };
+  }, [checkUserAuth]);
+
+  const login = useCallback(async ({ email, password }) => {
+    setAuthError(null);
+    const { user: loggedInUser } = await base44.auth.loginViaEmailPassword(email, password);
+    applyAuthenticatedUser(loggedInUser || await base44.auth.me());
+  }, [applyAuthenticatedUser]);
+
+  const register = useCallback(async ({ email, fullName, password }) => {
+    setAuthError(null);
+    const { user: registeredUser } = await base44.auth.register({
+      email,
+      full_name: fullName,
+      password,
+    });
+    applyAuthenticatedUser(registeredUser || await base44.auth.me());
+  }, [applyAuthenticatedUser]);
+
+  const logout = useCallback(async (shouldRedirect = true) => {
+    try {
+      await base44.auth.logout();
+    } finally {
+      setUser(null);
+      setIsAuthenticated(false);
+      setAuthChecked(true);
+      setAuthError(null);
+      setIsLoadingAuth(false);
+      BackgroundSyncService.stop();
+
+      if (shouldRedirect) {
+        replaceBrowserPath('/login');
+      }
+    }
+  }, []);
+
+  const navigateToLogin = useCallback(() => {
+    replaceBrowserPath('/login');
+  }, []);
+
+  const checkAppState = checkUserAuth;
+
+  const value = useMemo(() => ({
+    user,
+    isAuthenticated,
+    isLoadingAuth,
+    isLoadingPublicSettings: false,
+    authError,
+    appPublicSettings,
+    authChecked,
+    login,
+    register,
+    logout,
+    navigateToLogin,
+    checkUserAuth,
+    checkAppState,
+  }), [
+    user,
+    isAuthenticated,
+    isLoadingAuth,
+    authError,
+    appPublicSettings,
+    authChecked,
+    login,
+    register,
+    logout,
+    navigateToLogin,
+    checkUserAuth,
+    checkAppState,
+  ]);
+
+  return (
+    <AuthContext.Provider value={value}>
+      {children}
+    </AuthContext.Provider>
+  );
+};
 
 export const useAuth = () => {
   const context = useContext(AuthContext);
@@ -9,45 +154,4 @@ export const useAuth = () => {
     throw new Error('useAuth must be used within an AuthProvider');
   }
   return context;
-};
-
-export const AuthProvider = ({ children }) => {
-  const [user, setUser] = useState(null);
-  const [isLoadingAuth, setIsLoadingAuth] = useState(true);
-  const [isLoadingPublicSettings, setIsLoadingPublicSettings] = useState(true);
-  const [authError, setAuthError] = useState(null);
-
-  useEffect(() => {
-    // Проверка аутентификации
-    const checkAuth = async () => {
-      try {
-        const currentUser = await base44.auth.getCurrentUser();
-        setUser(currentUser);
-        setIsLoadingAuth(false);
-      } catch (error) {
-        setAuthError(error);
-        setIsLoadingAuth(false);
-      }
-    };
-
-    checkAuth();
-  }, []);
-
-  const navigateToLogin = () => {
-    window.location.href = '/login';
-  };
-
-  const value = {
-    user,
-    isLoadingAuth,
-    isLoadingPublicSettings,
-    authError,
-    navigateToLogin,
-  };
-
-  return (
-    <AuthContext.Provider value={value}>
-      {children}
-    </AuthContext.Provider>
-  );
 };

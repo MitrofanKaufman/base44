@@ -1,0 +1,13 @@
+section(1 /*1*/,1 /*1*/,1 /*1*/,0,function(){
+   section_start("{\"n\":\"Initialize\"}", 0)!
+
+   section_end()!
+
+   _call(_on_start, null)!
+
+   section_start("", 101574666)!
+   /*Dat:eyJzIjoibG9hZCIsInYiOjEsImYiOltdLCJ1dyI6IjEiLCJ1dCI6IjAiLCJ1dG8iOiIwIiwidW0iOiIwIiwidWUiOiIwIiwidXNwIjoiMCIsImQiOlt7ImlkIjoiTG9hZFVybCIsInR5cGUiOiJjb25zdHIiLCJkYXRhIjoieWEucnUiLCJjbGFzcyI6InN0cmluZyIsImlzX2RlZiI6ZmFsc2V9LHsiaWQiOiJSZWZlcnJlciIsInR5cGUiOiJjb25zdHIiLCJkYXRhIjoiIiwiY2xhc3MiOiJzdHJpbmciLCJpc19kZWYiOnRydWV9XX0=*/
+   _load("ya.ru", "", false)!
+   section_end()!
+
+})!

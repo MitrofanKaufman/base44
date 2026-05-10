@@ -1,23 +1,37 @@
+import { useEffect } from 'react';
+import { Navigate, Outlet } from 'react-router-dom';
 import { useAuth } from '@/lib/AuthContext';
-import { Loader2 } from 'lucide-react';
+import UserNotRegisteredError from '@/components/UserNotRegisteredError';
 
-export default function ProtectedRoute({ children }) {
-  const { user, isLoadingAuth } = useAuth();
+const DefaultFallback = () => (
+  <div className="fixed inset-0 flex items-center justify-center">
+    <div className="w-8 h-8 border-4 border-slate-200 border-t-slate-800 rounded-full animate-spin"></div>
+  </div>
+);
 
-  if (isLoadingAuth) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-background">
-        <div className="flex flex-col items-center gap-3">
-          <Loader2 className="h-8 w-8 animate-spin" />
-          <span className="text-sm text-muted-foreground">Загрузка...</span>
-        </div>
-      </div>
-    );
+export default function ProtectedRoute({ fallback = <DefaultFallback />, unauthenticatedElement = <Navigate to="/login" replace /> }) {
+  const { isAuthenticated, isLoadingAuth, authChecked, authError, checkUserAuth } = useAuth();
+
+  useEffect(() => {
+    if (!authChecked && !isLoadingAuth) {
+      checkUserAuth();
+    }
+  }, [authChecked, isLoadingAuth, checkUserAuth]);
+
+  if (isLoadingAuth || !authChecked) {
+    return fallback;
   }
 
-  if (!user) {
-    return null; // AuthContext обработает перенаправление
+  if (authError) {
+    if (authError.type === 'user_not_registered') {
+      return <UserNotRegisteredError />;
+    }
+    return unauthenticatedElement;
   }
 
-  return children;
+  if (!isAuthenticated) {
+    return unauthenticatedElement;
+  }
+
+  return <Outlet />;
 }

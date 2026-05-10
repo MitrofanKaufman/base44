@@ -1,0 +1,4 @@
+notes,wb_api_token,phone,name,wb_api_token_ads,email,status,id,created_date,updated_date,created_by_id,created_by,is_sample
+"Крупный продавец чайной посуды на WB","","+7 495 123-45-67","ООО Ромашка","","romashka@example.com","active","69f8702ffbe18087bd8a5e6c","2026-05-04T10:08:47.092000","2026-05-04T10:08:47.092000","69f86c93133b1c7af8950aed","mitrofan.kaufman@gmail.com","false"
+"Товары для дома и кухни","","+7 916 555-12-34","ИП Петров А.В.","","petrov@shop.ru","active","69f8702ffbe18087bd8a5e6d","2026-05-04T10:08:47.092000","2026-05-04T10:08:47.092000","69f86c93133b1c7af8950aed","mitrofan.kaufman@gmail.com","false"
+"","","","Marketplace Store","","store@mp.ru","trial","69f8702ffbe18087bd8a5e6e","2026-05-04T10:08:47.092000","2026-05-04T10:08:47.092000","69f86c93133b1c7af8950aed","mitrofan.kaufman@gmail.com","false"

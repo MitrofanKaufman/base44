@@ -1,0 +1,102 @@
+services:
+  api:
+    build:
+      context: ./backend
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    environment:
+      - PORT=3000
+      - DATABASE_URL=postgresql://${POSTGRES_USER:-base44}:${POSTGRES_PASSWORD:-base44}@postgres:5432/${POSTGRES_DB:-base44}
+      - REDIS_URL=redis://redis:6379
+      - JWT_SECRET=${JWT_SECRET:-change-me-in-production}
+      - JWT_EXPIRES_IN=${JWT_EXPIRES_IN:-7d}
+      - AUTH_COOKIE_NAME=${AUTH_COOKIE_NAME:-base44_access_token}
+      - CORS_ORIGIN=${CORS_ORIGIN:-http://localhost}
+      - ALLOW_ROLE_OVERRIDE=${ALLOW_ROLE_OVERRIDE:-false}
+    ports:
+      - "3000:3000"
+    restart: unless-stopped
+
+  worker:
+    build:
+      context: ./backend
+    command: ["npm", "run", "worker"]
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    environment:
+      - DATABASE_URL=postgresql://${POSTGRES_USER:-base44}:${POSTGRES_PASSWORD:-base44}@postgres:5432/${POSTGRES_DB:-base44}
+      - REDIS_URL=redis://redis:6379
+    restart: unless-stopped
+
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    depends_on:
+      api:
+        condition: service_started
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    ports:
+      - "8080:80"
+    environment:
+      - VITE_BASE44_APP_ID=${VITE_BASE44_APP_ID}
+      - VITE_BASE44_APP_BASE_URL=${VITE_BASE44_APP_BASE_URL}
+      - VITE_API_BASE_URL=${VITE_API_BASE_URL:-/api}
+      - BASE44_LEGACY_SDK_IMPORTS=${BASE44_LEGACY_SDK_IMPORTS:-false}
+    restart: unless-stopped
+
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-base44}
+      POSTGRES_USER: ${POSTGRES_USER:-base44}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-base44}
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./db/init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-base44} -d ${POSTGRES_DB:-base44}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+
+  redis:
+    image: redis:7-alpine
+    command: ["redis-server", "--appendonly", "yes"]
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    restart: unless-stopped
+
+  nginx:
+    image: nginx:1.27-alpine
+    depends_on:
+      - api
+      - app
+    ports:
+      - "80:80"
+    volumes:
+      - ./nginx.conf:/etc/nginx/conf.d/default.conf:ro
+    restart: unless-stopped
+
+volumes:
+  postgres_data:
+  redis_data:

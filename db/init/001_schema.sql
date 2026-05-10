@@ -1,0 +1,329 @@
+CREATE EXTENSION IF NOT EXISTS pgcrypto;
+
+CREATE TABLE IF NOT EXISTS clients (
+  id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
+  name TEXT NOT NULL,
+  email TEXT,
+  phone TEXT,
+  wb_api_token TEXT,
+  wb_api_token_ads TEXT,
+  status TEXT DEFAULT 'active' CHECK (status IN ('active', 'inactive', 'trial')),
+  notes TEXT,
+  created_date TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_date TIMESTAMPTZ NOT NULL DEFAULT now(),
+  created_by TEXT
+);
+
+CREATE TABLE IF NOT EXISTS projects (
+  id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
+  client_id TEXT NOT NULL REFERENCES clients(id) ON DELETE CASCADE,
+  name TEXT NOT NULL,
+  description TEXT,
+  status TEXT DEFAULT 'active' CHECK (status IN ('active', 'paused', 'completed', 'archived')),
+  wb_supplier_id TEXT,
+  fixed_monthly NUMERIC,
+  created_date TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_date TIMESTAMPTZ NOT NULL DEFAULT now(),
+  created_by TEXT
+);
+
+CREATE TABLE IF NOT EXISTS products (
+  id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
+  project_id TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+  client_id TEXT REFERENCES clients(id) ON DELETE SET NULL,
+  wb_sku TEXT NOT NULL,
+  name TEXT NOT NULL,
+  image_url TEXT,
+  category TEXT,
+  price NUMERIC,
+  sale_price NUMERIC,
+  discount_pct NUMERIC,
+  wb_commission_pct NUMERIC,
+  size_length_cm NUMERIC,
+  size_width_cm NUMERIC,
+  size_height_cm NUMERIC,
+  weight_kg NUMERIC,
+  fulfillment_mode TEXT CHECK (fulfillment_mode IN ('FBO', 'FBS')),
+  status TEXT DEFAULT 'active' CHECK (status IN ('active', 'archived')),
+  last_synced_at TIMESTAMPTZ,
+  created_date TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_date TIMESTAMPTZ NOT NULL DEFAULT now(),
+  created_by TEXT
+);
+
+CREATE TABLE IF NOT EXISTS calculations (
+  id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
+  product_id TEXT NOT NULL REFERENCES products(id) ON DELETE CASCADE,
+  project_id TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+  client_id TEXT REFERENCES clients(id) ON DELETE SET NULL,
+  name TEXT,
+  fulfillment_mode TEXT CHECK (fulfillment_mode IN ('FBO', 'FBS')),
+  tax_system TEXT CHECK (tax_system IN ('usn_income', 'usn_income_expense')),
+  tax_pct NUMERIC,
+  acquiring_pct NUMERIC,
+  promo_pct NUMERIC,
+  return_rate_pct NUMERIC,
+  cogs_purchase NUMERIC,
+  cogs_packaging NUMERIC,
+  cogs_fulfillment NUMERIC,
+  cogs_inbound_to_wb NUMERIC,
+  waste_pct NUMERIC,
+  cac NUMERIC,
+  paid_share_pct NUMERIC,
+  fixed_monthly NUMERIC,
+  fbo_wb_logistics NUMERIC,
+  fbo_storage NUMERIC,
+  fbo_other NUMERIC,
+  fbs_last_mile NUMERIC,
+  fbs_ops NUMERIC,
+  fbs_storage NUMERIC,
+  fbs_other NUMERIC,
+  return_loss NUMERIC,
+  price_net NUMERIC,
+  revenue_net NUMERIC,
+  cogs_base NUMERIC,
+  cogs_with_waste NUMERIC,
+  var_cost NUMERIC,
+  gross_profit NUMERIC,
+  gross_margin_pct NUMERIC,
+  marketing_cost NUMERIC,
+  contribution NUMERIC,
+  contribution_pct NUMERIC,
+  bep_units NUMERIC,
+  is_profitable BOOLEAN,
+  created_date TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_date TIMESTAMPTZ NOT NULL DEFAULT now(),
+  created_by TEXT
+);
+
+CREATE TABLE IF NOT EXISTS raw_marketplace_frames (
+  id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
+  schemaVersion TEXT,
+  source TEXT NOT NULL CHECK (source IN ('wildberries', 'yandex', 'ozon')),
+  stream TEXT NOT NULL,
+  sourceEventId TEXT NOT NULL,
+  payloadHash TEXT,
+  emittedAt TIMESTAMPTZ,
+  receivedAt TIMESTAMPTZ,
+  traceId TEXT,
+  payload JSONB NOT NULL,
+  processingStatus TEXT DEFAULT 'received' CHECK (processingStatus IN ('received', 'processing', 'processed', 'failed')),
+  created_date TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_date TIMESTAMPTZ NOT NULL DEFAULT now(),
+  created_by TEXT
+);
+
+CREATE TABLE IF NOT EXISTS marketplace_events (
+  id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
+  schemaVersion TEXT,
+  type TEXT NOT NULL CHECK (type IN ('product.update', 'product.delete', 'seller.update', 'seller.delete', 'order.created', 'order.updated')),
+  source TEXT NOT NULL CHECK (source IN ('wildberries', 'yandex', 'ozon')),
+  sourceEventId TEXT,
+  traceId TEXT,
+  data JSONB NOT NULL,
+  createdAt TIMESTAMPTZ,
+  created_date TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_date TIMESTAMPTZ NOT NULL DEFAULT now(),
+  created_by TEXT
+);
+
+CREATE TABLE IF NOT EXISTS product_snapshots (
+  id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
+  productId TEXT NOT NULL,
+  source TEXT NOT NULL CHECK (source IN ('wildberries', 'yandex', 'ozon')),
+  externalId TEXT,
+  name TEXT,
+  sku TEXT,
+  price NUMERIC,
+  data JSONB NOT NULL,
+  updatedAt TIMESTAMPTZ,
+  created_date TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_date TIMESTAMPTZ NOT NULL DEFAULT now(),
+  created_by TEXT
+);
+
+CREATE TABLE IF NOT EXISTS seller_snapshots (
+  id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
+  sellerId TEXT NOT NULL,
+  source TEXT NOT NULL CHECK (source IN ('wildberries', 'yandex', 'ozon')),
+  name TEXT,
+  rating NUMERIC,
+  data JSONB NOT NULL,
+  updatedAt TIMESTAMPTZ,
+  created_date TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_date TIMESTAMPTZ NOT NULL DEFAULT now(),
+  created_by TEXT
+);
+
+CREATE TABLE IF NOT EXISTS unit_economics_snapshots (
+  id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
+  itemId TEXT NOT NULL,
+  source TEXT NOT NULL CHECK (source IN ('wildberries', 'yandex', 'ozon')),
+  price NUMERIC,
+  cost NUMERIC,
+  margin NUMERIC,
+  marginPct NUMERIC,
+  metrics JSONB NOT NULL,
+  updatedAt TIMESTAMPTZ,
+  created_date TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_date TIMESTAMPTZ NOT NULL DEFAULT now(),
+  created_by TEXT
+);
+
+CREATE TABLE IF NOT EXISTS ingestion_runs (
+  id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
+  runId TEXT,
+  source TEXT NOT NULL CHECK (source IN ('wildberries', 'yandex', 'ozon')),
+  sourceMode TEXT CHECK (sourceMode IN ('real', 'mock', 'fallback')),
+  mode TEXT CHECK (mode IN ('product', 'seller', 'full')),
+  stream TEXT,
+  status TEXT NOT NULL CHECK (status IN ('queued', 'running', 'completed', 'failed', 'cancelled', 'partial')),
+  progress NUMERIC,
+  currentStage TEXT,
+  request JSONB,
+  counters JSONB,
+  timeline JSONB,
+  errors JSONB,
+  report JSONB,
+  startedAt TIMESTAMPTZ,
+  finishedAt TIMESTAMPTZ,
+  durationMs NUMERIC,
+  notes TEXT,
+  created_date TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_date TIMESTAMPTZ NOT NULL DEFAULT now(),
+  created_by TEXT
+);
+
+CREATE TABLE IF NOT EXISTS sync_cursors (
+  id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
+  stream TEXT NOT NULL,
+  source TEXT NOT NULL CHECK (source IN ('wildberries', 'yandex', 'ozon')),
+  lastEventId TEXT,
+  lastTimestamp TIMESTAMPTZ,
+  updatedAt TIMESTAMPTZ,
+  created_date TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_date TIMESTAMPTZ NOT NULL DEFAULT now(),
+  created_by TEXT
+);
+
+CREATE TABLE IF NOT EXISTS dead_letters (
+  id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
+  runId TEXT,
+  stage TEXT NOT NULL CHECK (stage IN ('validate-input', 'collect-marketplace-data', 'normalize-events', 'save-raw-frames', 'save-events', 'update-snapshots', 'calculate-unit-economics', 'verify-results', 'build-report')),
+  reason TEXT NOT NULL CHECK (reason IN ('validation_error', 'processing_error', 'schema_mismatch', 'signature_invalid', 'duplicate_event', 'collection_error', 'normalization_error', 'calculation_error')),
+  message TEXT,
+  sourceEventId TEXT,
+  payloadHash TEXT,
+  traceId TEXT,
+  retryable BOOLEAN DEFAULT true,
+  payload JSONB NOT NULL,
+  stackTrace TEXT,
+  resolvedAt TIMESTAMPTZ,
+  resolved BOOLEAN DEFAULT false,
+  createdAt TIMESTAMPTZ,
+  created_date TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_date TIMESTAMPTZ NOT NULL DEFAULT now(),
+  created_by TEXT
+);
+
+CREATE TABLE IF NOT EXISTS logistics_directories (
+  id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
+  source TEXT NOT NULL CHECK (source IN ('wildberries', 'yandex', 'ozon')),
+  direction_id TEXT NOT NULL,
+  direction_name TEXT NOT NULL,
+  tariffs JSONB NOT NULL,
+  raw_data JSONB,
+  synced_at TIMESTAMPTZ,
+  created_date TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_date TIMESTAMPTZ NOT NULL DEFAULT now(),
+  created_by TEXT
+);
+
+CREATE TABLE IF NOT EXISTS price_history (
+  id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
+  product_id TEXT NOT NULL,
+  date TIMESTAMPTZ NOT NULL,
+  our_price NUMERIC NOT NULL,
+  competitors JSONB,
+  margin_pct NUMERIC,
+  cost NUMERIC,
+  notes TEXT,
+  created_date TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_date TIMESTAMPTZ NOT NULL DEFAULT now(),
+  created_by TEXT
+);
+
+CREATE TABLE IF NOT EXISTS sales_data (
+  id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
+  product_id TEXT NOT NULL,
+  period_start DATE NOT NULL,
+  period_end DATE NOT NULL,
+  units_sold NUMERIC NOT NULL,
+  revenue NUMERIC,
+  cogs NUMERIC,
+  profit NUMERIC NOT NULL,
+  margin_pct NUMERIC,
+  avg_price NUMERIC,
+  source TEXT CHECK (source IN ('wildberries', 'yandex', 'ozon', 'manual')),
+  created_date TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_date TIMESTAMPTZ NOT NULL DEFAULT now(),
+  created_by TEXT
+);
+
+CREATE TABLE IF NOT EXISTS subscriptions (
+  id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
+  name TEXT NOT NULL,
+  slug TEXT NOT NULL UNIQUE,
+  description TEXT,
+  price_monthly NUMERIC,
+  price_annual NUMERIC,
+  is_default BOOLEAN DEFAULT false,
+  is_locked BOOLEAN DEFAULT false,
+  features JSONB,
+  limits JSONB,
+  position NUMERIC DEFAULT 0,
+  status TEXT DEFAULT 'active' CHECK (status IN ('active', 'inactive', 'archived')),
+  created_date TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_date TIMESTAMPTZ NOT NULL DEFAULT now(),
+  created_by TEXT
+);
+
+CREATE TABLE IF NOT EXISTS features (
+  id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
+  name TEXT NOT NULL,
+  description TEXT,
+  slug TEXT NOT NULL UNIQUE,
+  category TEXT NOT NULL CHECK (category IN ('products', 'analytics', 'automation', 'integrations', 'admin')),
+  requires_subscription BOOLEAN DEFAULT true,
+  is_premium BOOLEAN DEFAULT false,
+  position NUMERIC DEFAULT 0,
+  status TEXT DEFAULT 'active' CHECK (status IN ('active', 'inactive', 'beta')),
+  created_date TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_date TIMESTAMPTZ NOT NULL DEFAULT now(),
+  created_by TEXT
+);
+
+CREATE TABLE IF NOT EXISTS user_subscriptions (
+  id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
+  user_email TEXT NOT NULL,
+  subscription_id TEXT NOT NULL REFERENCES subscriptions(id) ON DELETE CASCADE,
+  status TEXT DEFAULT 'active' CHECK (status IN ('active', 'inactive', 'expired', 'cancelled')),
+  start_date DATE,
+  end_date DATE,
+  billing_cycle TEXT DEFAULT 'monthly' CHECK (billing_cycle IN ('monthly', 'annual')),
+  auto_renew BOOLEAN DEFAULT true,
+  notes TEXT,
+  created_date TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_date TIMESTAMPTZ NOT NULL DEFAULT now(),
+  created_by TEXT
+);
+
+CREATE TABLE IF NOT EXISTS app_users (
+  id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
+  email TEXT NOT NULL UNIQUE,
+  full_name TEXT NOT NULL,
+  role TEXT NOT NULL CHECK (role IN ('admin', 'user')),
+  created_date TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_date TIMESTAMPTZ NOT NULL DEFAULT now(),
+  created_by TEXT
+);

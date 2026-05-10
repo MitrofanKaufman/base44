@@ -1,0 +1,78 @@
+{
+  "name": "LogisticsDirectory",
+  "type": "object",
+  "properties": {
+    "source": {
+      "type": "string",
+      "enum": [
+        "wildberries",
+        "yandex",
+        "ozon"
+      ],
+      "description": "\u0418\u0441\u0442\u043e\u0447\u043d\u0438\u043a \u0441\u043f\u0440\u0430\u0432\u043e\u0447\u043d\u0438\u043a\u0430"
+    },
+    "direction_id": {
+      "type": "string",
+      "description": "\u0423\u043d\u0438\u043a\u0430\u043b\u044c\u043d\u044b\u0439 \u0438\u0434\u0435\u043d\u0442\u0438\u0444\u0438\u043a\u0430\u0442\u043e\u0440 \u043d\u0430\u043f\u0440\u0430\u0432\u043b\u0435\u043d\u0438\u044f"
+    },
+    "direction_name": {
+      "type": "string",
+      "description": "\u041d\u0430\u0437\u0432\u0430\u043d\u0438\u0435 \u043d\u0430\u043f\u0440\u0430\u0432\u043b\u0435\u043d\u0438\u044f/\u0441\u043a\u043b\u0430\u0434\u0430"
+    },
+    "tariffs": {
+      "type": "object",
+      "description": "\u0422\u0430\u0440\u0438\u0444\u044b \u043f\u043e \u0441\u0445\u0435\u043c\u0430\u043c \u0434\u043e\u0441\u0442\u0430\u0432\u043a\u0438",
+      "properties": {
+        "FBO": {
+          "type": "object",
+          "properties": {
+            "base": {
+              "type": "number",
+              "description": "\u0411\u0430\u0437\u043e\u0432\u0430\u044f \u0441\u0442\u0430\u0432\u043a\u0430"
+            },
+            "per_kg": {
+              "type": "number",
+              "description": "\u0421\u0442\u043e\u0438\u043c\u043e\u0441\u0442\u044c \u0437\u0430 \u043a\u0433"
+            },
+            "storage": {
+              "type": "number",
+              "description": "\u0425\u0440\u0430\u043d\u0435\u043d\u0438\u0435 \u0432 \u0434\u0435\u043d\u044c"
+            }
+          }
+        },
+        "FBS": {
+          "type": "object",
+          "properties": {
+            "base": {
+              "type": "number",
+              "description": "\u0411\u0430\u0437\u043e\u0432\u0430\u044f \u0441\u0442\u0430\u0432\u043a\u0430"
+            },
+            "per_kg": {
+              "type": "number",
+              "description": "\u0421\u0442\u043e\u0438\u043c\u043e\u0441\u0442\u044c \u0437\u0430 \u043a\u0433"
+            },
+            "storage": {
+              "type": "number",
+              "description": "\u0425\u0440\u0430\u043d\u0435\u043d\u0438\u0435 \u0432 \u0434\u0435\u043d\u044c"
+            }
+          }
+        }
+      }
+    },
+    "raw_data": {
+      "type": "object",
+      "description": "\u041f\u043e\u043b\u043d\u044b\u0435 \u0434\u0430\u043d\u043d\u044b\u0435 \u0438\u0437 \u0441\u043f\u0440\u0430\u0432\u043e\u0447\u043d\u0438\u043a\u0430 \u043c\u0430\u0440\u043a\u0435\u0442\u043f\u043b\u0435\u0439\u0441\u0430"
+    },
+    "synced_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "\u0412\u0440\u0435\u043c\u044f \u043f\u043e\u0441\u043b\u0435\u0434\u043d\u0435\u0439 \u0441\u0438\u043d\u0445\u0440\u043e\u043d\u0438\u0437\u0430\u0446\u0438\u0438"
+    }
+  },
+  "required": [
+    "source",
+    "direction_id",
+    "direction_name",
+    "tariffs"
+  ]
+}

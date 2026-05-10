@@ -1,54 +1,43 @@
-# Velocis - Аналитическая платформа Wildberries
+**Welcome to your Base44 project** 
 
-Проект для юнит-экономики и аналитики Wildberries, созданный на React + Vite.
+**About**
 
-## Стек технологий
+View and Edit  your app on [Base44.com](http://Base44.com) 
 
-- **Frontend**: React 18, Vite
-- **UI**: Tailwind CSS, Radix UI, Lucide Icons
-- **State Management**: TanStack Query
-- **Routing**: React Router
-- **Backend**: Base44 Platform
+This project contains everything you need to run your app locally.
 
-## Структура проекта
+**Edit the code in your local development environment**
+
+Any change pushed to the repo will also be reflected in the Base44 Builder.
+
+**Prerequisites:** 
+
+1. Clone the repository using the project's Git URL 
+2. Navigate to the project directory
+3. Install dependencies: `npm install`
+4. Create an `.env.local` file and set the right environment variables
 
 ```
-src/
-├── pages/          # Страницы приложения
-│   ├── Dashboard.jsx
-│   ├── Clients.jsx
-│   ├── Projects.jsx
-│   ├── Products.jsx
-│   └── Calculations.jsx
-├── components/      # UI компоненты
-├── lib/            # Утилиты и хелперы
-├── api/            # API клиенты
-├── hooks/          # Кастомные хуки
-└── utils/          # Вспомогательные функции
+VITE_API_BASE_URL=/api
+VITE_API_PROXY_TARGET=http://127.0.0.1:3000
+VITE_BASE44_APP_ID=local
+VITE_BASE44_APP_BASE_URL=
 ```
 
-## Основные функции
+Run the backend dependencies: `docker compose up -d postgres redis`
 
-- **Дашборд**: Обзор ключевых метрик
-- **Клиенты**: Управление клиентской базой
-- **Проекты**: Отслеживание проектов
-- **Товары**: Каталог товаров Wildberries
-- **Расчёты**: Юнит-экономика и аналитика
+Run the API: `cd backend && npm run dev`
 
-## Установка и запуск
+Run the app: `npm run dev`
 
-```bash
-npm install
-npm run dev
-```
+The first registered user is assigned the `admin` role.
 
-## Особенности дизайна
+**Publish your changes**
 
-- Тёплая палитра в стиле SaaS-кабинета
-- Адаптивный дизайн с sidebar навигацией
-- Мягкие тени и скругления
-- Терракотовый акцент (#9a3412)
+Open [Base44.com](http://Base44.com) and click on Publish.
 
-## Лицензия
+**Docs & Support**
 
-Приватный проект
+Documentation: [https://docs.base44.com/Integrations/Using-GitHub](https://docs.base44.com/Integrations/Using-GitHub)
+
+Support: [https://app.base44.com/support](https://app.base44.com/support)

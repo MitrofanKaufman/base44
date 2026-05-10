@@ -1,0 +1,10 @@
+node_modules
+dist
+.playwright-mcp
+mcp-profile-copy
+.git
+.gitignore
+*.log
+*.tmp
+base44-files.json
+base44-files-full.json
