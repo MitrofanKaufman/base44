@@ -32,6 +32,19 @@ Run the app: `npm run dev`
 
 The first registered user is assigned the `admin` role.
 
+**Production compose**
+
+Use the production override only with explicit secrets:
+
+```
+POSTGRES_DB=base44
+POSTGRES_USER=base44
+POSTGRES_PASSWORD=<strong-password>
+JWT_SECRET=<strong-random-secret>
+CORS_ORIGIN=https://your-domain.example
+docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --build
+```
+
 **Publish your changes**
 
 Open [Base44.com](http://Base44.com) and click on Publish.

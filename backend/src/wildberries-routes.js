@@ -1,0 +1,344 @@
+import {
+  normalizeWbLogisticsDirections,
+  WbSellerApi,
+  WbSellerApiError,
+} from './wildberries-seller-api.js';
+import { jobQueue, WB_COLLECT_PRODUCT_JOB } from './queue.js';
+import {
+  collectWbProduct,
+  mapWbCollectionToProductFields,
+  WbCollectionError,
+} from './wildberries-public-api.js';
+import {
+  createWbJobRecord,
+  getWbJob,
+  listWbJobs,
+  markWbJobCanceled,
+  saveWbCollectionResult,
+} from './wildberries-repository.js';
+
+const tokenMeta = (token) => {
+  const trimmed = String(token ?? '').trim();
+  if (!trimmed) return { hasToken: false };
+  return {
+    hasToken: true,
+    last4: trimmed.slice(-4),
+  };
+};
+
+const getClient = async (pool, clientId) => {
+  const result = await pool.query(
+    'SELECT id, name, wb_api_token FROM clients WHERE id = $1',
+    [clientId],
+  );
+  return result.rows[0] || null;
+};
+
+const getProduct = async (pool, productId) => {
+  const result = await pool.query(
+    'SELECT id, wb_sku, project_id, client_id FROM products WHERE id = $1',
+    [productId],
+  );
+  return result.rows[0] || null;
+};
+
+const upsertLogisticsDirection = async (pool, direction, createdBy) => {
+  const values = [
+    direction.source,
+    direction.direction_id,
+    direction.direction_name,
+    JSON.stringify(direction.tariffs || {}),
+    JSON.stringify(direction.raw_data || {}),
+    direction.synced_at,
+  ];
+
+  const updated = await pool.query(
+    `UPDATE logistics_directories
+       SET direction_name = $3,
+           tariffs = $4::jsonb,
+           raw_data = $5::jsonb,
+           synced_at = $6::timestamptz,
+           updated_date = now()
+     WHERE source = $1 AND direction_id = $2
+     RETURNING id`,
+    values,
+  );
+
+  if (updated.rowCount > 0) return { inserted: false, updated: updated.rowCount };
+
+  await pool.query(
+    `INSERT INTO logistics_directories (
+       source,
+       direction_id,
+       direction_name,
+       tariffs,
+       raw_data,
+       synced_at,
+       created_by
+     ) VALUES ($1, $2, $3, $4::jsonb, $5::jsonb, $6::timestamptz, $7)`,
+    [...values, createdBy || null],
+  );
+
+  return { inserted: true, updated: 0 };
+};
+
+const toClientError = (error) => {
+  if (error instanceof WbSellerApiError) {
+    return { status: error.status, message: error.message };
+  }
+  if (error instanceof WbCollectionError) {
+    return { status: 404, message: error.message };
+  }
+  return { status: 500, message: 'Wildberries sync failed' };
+};
+
+const toPreviewResponse = (collection) => {
+  const mapped = mapWbCollectionToProductFields(collection);
+  return {
+    ok: collection.ok,
+    article: collection.article,
+    nmId: collection.nmId,
+    fetchedAt: collection.fetchedAt,
+    product: collection.product,
+    seller: collection.seller,
+    endpoints: collection.endpoints,
+    errors: collection.errors,
+    partial: collection.partial,
+    mapped,
+    current_price: mapped.current_price,
+    stock: mapped.stock,
+    commission_pct: mapped.commission_pct,
+    minimal_price: mapped.minimal_price,
+  };
+};
+
+export function registerWildberriesRoutes(app, pool, requireAuth) {
+  app.get('/wildberries/products/:article/preview', requireAuth, async (req, res, next) => {
+    try {
+      const collection = await collectWbProduct(req.params.article, {
+        query: req.query.query,
+        timeoutMs: Number(req.query.timeout_ms || process.env.WB_FETCH_TIMEOUT_MS || 15_000),
+      });
+      return res.json(toPreviewResponse(collection));
+    } catch (error) {
+      const { status, message } = toClientError(error);
+      if (status >= 500 && !(error instanceof WbCollectionError)) return next(error);
+      return res.status(status).json({ error: message });
+    }
+  });
+
+  app.post('/wildberries/products/:article/collect', requireAuth, async (req, res, next) => {
+    try {
+      const collection = await collectWbProduct(req.params.article, {
+        query: req.body?.query,
+        timeoutMs: Number(req.body?.timeout_ms || req.body?.timeoutMs || process.env.WB_FETCH_TIMEOUT_MS || 15_000),
+      });
+      const persistence = req.body?.save === false
+        ? null
+        : await saveWbCollectionResult(
+          pool,
+          collection,
+          {
+            ...req.body,
+            article: req.params.article,
+            product_id: req.body?.product_id ?? req.body?.productId,
+          },
+          req.auth?.email,
+        );
+      return res.json({ ...toPreviewResponse(collection), persistence });
+    } catch (error) {
+      const { status, message } = toClientError(error);
+      if (status >= 500 && !(error instanceof WbCollectionError)) return next(error);
+      return res.status(status).json({ error: message });
+    }
+  });
+
+  app.post('/wildberries/products/:productId/sync', requireAuth, async (req, res, next) => {
+    try {
+      const product = await getProduct(pool, req.params.productId);
+      if (!product) return res.status(404).json({ error: 'Product not found' });
+      const article = String(product.wb_sku || '').trim();
+      if (!article) return res.status(400).json({ error: 'Product has no WB SKU' });
+
+      const collection = await collectWbProduct(article, {
+        query: req.body?.query,
+        timeoutMs: Number(req.body?.timeout_ms || req.body?.timeoutMs || process.env.WB_FETCH_TIMEOUT_MS || 15_000),
+      });
+      const persistence = await saveWbCollectionResult(
+        pool,
+        collection,
+        {
+          ...req.body,
+          article,
+          product_id: product.id,
+          project_id: product.project_id,
+          client_id: product.client_id,
+        },
+        req.auth?.email,
+      );
+      return res.json({ ...toPreviewResponse(collection), persistence });
+    } catch (error) {
+      const { status, message } = toClientError(error);
+      if (status >= 500 && !(error instanceof WbCollectionError)) return next(error);
+      return res.status(status).json({ error: message });
+    }
+  });
+
+  app.post('/wildberries/jobs', requireAuth, async (req, res, next) => {
+    try {
+      const payload = {
+        ...(req.body || {}),
+        product_id: req.body?.product_id ?? req.body?.productId,
+        project_id: req.body?.project_id ?? req.body?.projectId,
+        client_id: req.body?.client_id ?? req.body?.clientId,
+        user_email: req.auth?.email,
+      };
+      const jobRecord = await createWbJobRecord(pool, payload, req.auth?.email);
+      await jobQueue.add(
+        WB_COLLECT_PRODUCT_JOB,
+        {
+          ...jobRecord.payload,
+          jobRecordId: jobRecord.id,
+          user_email: req.auth?.email,
+        },
+        {
+          jobId: jobRecord.id,
+          attempts: Math.max(1, Number(req.body?.attempts || process.env.WB_JOB_ATTEMPTS || 2)),
+          removeOnComplete: { age: 24 * 60 * 60 },
+          removeOnFail: false,
+        },
+      );
+      return res.status(201).json({ ok: true, job: jobRecord });
+    } catch (error) {
+      return next(error);
+    }
+  });
+
+  app.get('/wildberries/jobs', requireAuth, async (req, res, next) => {
+    try {
+      const items = await listWbJobs(pool, req.query.limit || 100);
+      return res.json({ ok: true, items });
+    } catch (error) {
+      return next(error);
+    }
+  });
+
+  app.get('/wildberries/jobs/:id', requireAuth, async (req, res, next) => {
+    try {
+      const job = await getWbJob(pool, req.params.id);
+      if (!job) return res.status(404).json({ error: 'Job not found' });
+      return res.json({ ok: true, job });
+    } catch (error) {
+      return next(error);
+    }
+  });
+
+  app.post('/wildberries/jobs/:id/cancel', requireAuth, async (req, res, next) => {
+    try {
+      const bullJob = await jobQueue.getJob(req.params.id);
+      if (bullJob) {
+        await bullJob.discard();
+        await bullJob.remove();
+      }
+      const job = await markWbJobCanceled(pool, req.params.id);
+      return res.json({ ok: Boolean(job), job });
+    } catch (error) {
+      return next(error);
+    }
+  });
+
+  app.get('/wildberries/clients/:clientId/seller-token', requireAuth, async (req, res, next) => {
+    try {
+      const client = await getClient(pool, req.params.clientId);
+      if (!client) return res.status(404).json({ error: 'Client not found' });
+      return res.json(tokenMeta(client.wb_api_token));
+    } catch (error) {
+      return next(error);
+    }
+  });
+
+  app.put('/wildberries/clients/:clientId/seller-token', requireAuth, async (req, res, next) => {
+    try {
+      const token = req.body?.token === null ? '' : String(req.body?.token ?? '').trim();
+      const result = await pool.query(
+        `UPDATE clients
+            SET wb_api_token = $2,
+                updated_date = now()
+          WHERE id = $1
+          RETURNING wb_api_token`,
+        [req.params.clientId, token || null],
+      );
+      if (!result.rows[0]) return res.status(404).json({ error: 'Client not found' });
+      return res.json(tokenMeta(result.rows[0].wb_api_token));
+    } catch (error) {
+      return next(error);
+    }
+  });
+
+  app.post('/wildberries/clients/:clientId/logistics-directions/sync', requireAuth, async (req, res, next) => {
+    try {
+      const client = await getClient(pool, req.params.clientId);
+      if (!client) return res.status(404).json({ error: 'Client not found' });
+
+      const token = String(client.wb_api_token ?? '').trim();
+      if (!token) {
+        return res.status(400).json({ error: 'WB Seller API token is not configured for this client' });
+      }
+
+      const timeoutMs = Number(process.env.WB_SELLER_API_TIMEOUT_MS || 15_000);
+      const api = new WbSellerApi();
+      const endpointCalls = [
+        { key: 'marketplaceOffices', call: () => api.getMarketplaceOffices({ token, timeoutMs }) },
+        { key: 'marketplaceWarehouses', call: () => api.getMarketplaceWarehouses({ token, timeoutMs }) },
+        { key: 'suppliesWarehouses', call: () => api.getSuppliesWarehouses({ token, timeoutMs }) },
+      ];
+      const settled = await Promise.allSettled(
+        endpointCalls.map(async (entry) => ({ key: entry.key, payload: await entry.call() })),
+      );
+
+      const payloads = [];
+      const errors = [];
+      settled.forEach((result, index) => {
+        if (result.status === 'fulfilled') {
+          payloads.push(result.value);
+          return;
+        }
+        errors.push({
+          key: endpointCalls[index].key,
+          error: result.reason instanceof Error ? result.reason.message : String(result.reason),
+        });
+      });
+
+      if (payloads.length === 0) throw settled[0]?.reason || new Error('Wildberries sync failed');
+
+      const syncedAt = new Date().toISOString();
+      const directions = normalizeWbLogisticsDirections(payloads, { syncedAt });
+
+      let inserted = 0;
+      let updated = 0;
+      for (const direction of directions) {
+        const result = await upsertLogisticsDirection(pool, direction, req.auth?.email);
+        if (result.inserted) inserted += 1;
+        updated += result.updated;
+      }
+
+      return res.json({
+        ok: true,
+        source: 'wildberries',
+        client_id: client.id,
+        client_name: client.name,
+        synced_at: syncedAt,
+        count: directions.length,
+        inserted,
+        updated,
+        errors,
+        token: tokenMeta(token),
+        directions,
+      });
+    } catch (error) {
+      const { status, message } = toClientError(error);
+      if (status >= 500 && !(error instanceof WbSellerApiError)) return next(error);
+      return res.status(status).json({ error: message });
+    }
+  });
+}

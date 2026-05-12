@@ -3,6 +3,7 @@ import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContai
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { calculate } from '@/lib/unitEconomics';
+import { buildCalculatorViewModel } from '@/lib/calculatorViewModel';
 
 const MODES = [
   { id: 'price', label: 'Цена продажи (₽)', min: 0, max: 'auto' },
@@ -29,8 +30,9 @@ export default function InteractiveProfitChart({ form, result }) {
         : { ...form, cac: value };
       
       const testResult = calculate(testForm);
-      const monthlyPlan = form.monthly_plan || 1;
-      const profit = (testResult.contribution || 0) * monthlyPlan - (form.fixed_monthly || 0);
+      const testView = buildCalculatorViewModel(testForm, testResult);
+      const monthlyPlan = Number(form.monthly_plan) > 0 ? Number(form.monthly_plan) : 0;
+      const profit = (testResult.contribution || 0) * monthlyPlan - testView.monthly.fixedMonthlyTotal;
 
       data.push({
         value: Math.round(value),
@@ -43,8 +45,9 @@ export default function InteractiveProfitChart({ form, result }) {
   }, [form, selectedMode]);
 
   const currentProfit = useMemo(() => {
-    const monthlyPlan = form?.monthly_plan || 1;
-    return Math.round(((result?.contribution || 0) * monthlyPlan) - (form?.fixed_monthly || 0));
+    const monthlyPlan = Number(form?.monthly_plan) > 0 ? Number(form.monthly_plan) : 0;
+    const view = buildCalculatorViewModel(form, result);
+    return Math.round(((result?.contribution || 0) * monthlyPlan) - view.monthly.fixedMonthlyTotal);
   }, [form, result]);
 
   if (chartData.length === 0) {

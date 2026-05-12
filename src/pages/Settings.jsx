@@ -137,7 +137,7 @@ function formatDate(value) {
   }
 }
 
-function InfoTile({ icon: Icon, title, value, description }) {
+function InfoTile({ icon: Icon, title, value, description = '' }) {
   return (
     <div className="rounded-lg border border-border bg-card p-4 shadow-warm-sm">
       <div className="flex items-start gap-3">

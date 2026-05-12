@@ -24,8 +24,9 @@ export default function PickupPointSelector({
             // Извлекаем данные из direction_name и raw_data
             const point = {
               id: `${source}_${dir.direction_id}`,
+              directionId: dir.direction_id,
               name: dir.direction_name || 'Неизвестный пункт',
-              city: extractCity(dir.direction_name),
+              city: extractCity(dir.raw_data?.city || dir.raw_data?.address || dir.direction_name),
               address: extractAddress(dir.raw_data),
               type: determineType(dir.direction_name, dir.raw_data),
               source: source
@@ -64,7 +65,8 @@ export default function PickupPointSelector({
     return 'Адрес не указан';
   };
 
-  const determineType = (dirName) => {
+  const determineType = (dirName, rawData) => {
+    if (rawData?.type === 'pvz' || rawData?.type === 'warehouse') return rawData.type;
     const nameStr = (dirName || '').toLowerCase();
     if (nameStr.includes('склад') || nameStr.includes('warehouse')) return 'warehouse';
     if (nameStr.includes('пвз') || nameStr.includes('pickup')) return 'pvz';
@@ -79,7 +81,8 @@ export default function PickupPointSelector({
   }, {});
 
   const handleSelect = (pointId) => {
-    onPointChange(pointId);
+    const point = points.find(p => p.id === pointId);
+    onPointChange(pointId, point);
     setOpen(false);
   };
 

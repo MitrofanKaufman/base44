@@ -18,7 +18,7 @@ export default function StatusDistributionModal({ isOpen, onClose, data }) {
     });
 
     const chartData = Object.entries(dailyStats)
-      .sort((a, b) => new Date(a[0]) - new Date(b[0]))
+      .sort((a, b) => new Date(a[0]).getTime() - new Date(b[0]).getTime())
       .map(([date, stats]) => ({
         date,
         ...stats,

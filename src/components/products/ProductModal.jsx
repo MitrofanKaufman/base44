@@ -28,7 +28,7 @@ export default function ProductModal({ product, projects, clients: _clients, onC
   const projectMap = Object.fromEntries(projects.map(p => [p.id, p]));
 
   const mut = useMutation({
-    mutationFn: (data) => {
+    mutationFn: (/** @type {any} */ data) => {
       const proj = projectMap[data.project_id];
       const payload = { ...data, client_id: proj?.client_id };
       return isEdit

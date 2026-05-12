@@ -1,6 +1,25 @@
 import jwt from 'jsonwebtoken';
 
-const JWT_SECRET = process.env.JWT_SECRET || 'change-me-in-production';
+const LOCAL_DEV_JWT_SECRET = 'base44-local-development-secret';
+const UNSAFE_PRODUCTION_SECRETS = new Set([
+  LOCAL_DEV_JWT_SECRET,
+  'base44',
+  'base44-secret',
+]);
+
+function resolveJwtSecret() {
+  const secret = process.env.JWT_SECRET || LOCAL_DEV_JWT_SECRET;
+
+  if (process.env.NODE_ENV === 'production') {
+    if (!process.env.JWT_SECRET || UNSAFE_PRODUCTION_SECRETS.has(secret)) {
+      throw new Error('JWT_SECRET must be set to a strong unique value in production');
+    }
+  }
+
+  return secret;
+}
+
+const JWT_SECRET = resolveJwtSecret();
 const JWT_EXPIRES_IN = process.env.JWT_EXPIRES_IN || '7d';
 export const AUTH_COOKIE_NAME = process.env.AUTH_COOKIE_NAME || 'base44_access_token';
 

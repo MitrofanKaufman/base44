@@ -5,8 +5,22 @@ const connection = new IORedis(process.env.REDIS_URL || 'redis://redis:6379', {
   maxRetriesPerRequest: null
 });
 
-export const jobQueue = new Queue('base44-jobs', { connection });
+export const QUEUE_NAME = 'base44-jobs';
+export const WB_COLLECT_PRODUCT_JOB = 'wb:collect:product';
+
+export const jobQueue = new Queue(QUEUE_NAME, {
+  connection,
+  defaultJobOptions: {
+    removeOnComplete: { age: 24 * 60 * 60 },
+    removeOnFail: false,
+    attempts: 2,
+    backoff: { type: 'exponential', delay: 1500 }
+  }
+});
 
 export function createJobWorker(processor) {
-  return new Worker('base44-jobs', processor, { connection });
+  return new Worker(QUEUE_NAME, processor, {
+    connection,
+    concurrency: Number(process.env.WORKER_CONCURRENCY || 3)
+  });
 }

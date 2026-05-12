@@ -79,6 +79,8 @@ async function request(path, options = {}) {
   return data;
 }
 
+export const apiRequest = request;
+
 function createEntityHandler(entityName) {
   const basePath = `/entities/${entityName}`;
 
@@ -156,6 +158,7 @@ function createEntityHandler(entityName) {
   };
 }
 
+/** @type {any} */
 const entities = new Proxy({}, {
   get(_target, entityName) {
     if (typeof entityName !== 'string' || entityName === 'then' || entityName.startsWith('_')) {
@@ -223,6 +226,7 @@ const auth = {
   },
 };
 
+/** @type {any} */
 export const base44 = {
   auth,
   entities,

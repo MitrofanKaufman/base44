@@ -1,6 +1,6 @@
 import { useState, useMemo } from 'react';
 import { Plus, Trash2, Users, TrendingUp, TrendingDown, Minus } from 'lucide-react';
-import { calculate, formatRub, formatPct } from '@/lib/unitEconomics';
+import { calculate, formatRub, formatPct, ratioToPercent } from '@/lib/unitEconomics';
 
 const COLORS = ['#3b82f6', '#8b5cf6', '#f59e0b', '#ec4899', '#06b6d4'];
 
@@ -10,7 +10,7 @@ function calcMetrics(price, form) {
   return {
     grossMarginPct: res.grossMarginPct,
     contribution: res.contribution,
-    contributionPct: res.priceNet > 0 ? (res.contribution / res.priceNet) * 100 : 0,
+    contributionPct: res.contributionPct,
     isProfitable: res.isProfitable,
   };
 }
@@ -32,7 +32,7 @@ export default function CompetitorPriceBlock({ form, myResult }) {
   const myMetrics = {
     grossMarginPct: myResult.grossMarginPct,
     contribution: myResult.contribution,
-    contributionPct: myResult.priceNet > 0 ? (myResult.contribution / myResult.priceNet) * 100 : 0,
+    contributionPct: myResult.contributionPct,
     isProfitable: myResult.isProfitable,
   };
 
@@ -103,7 +103,7 @@ export default function CompetitorPriceBlock({ form, myResult }) {
               <td className="py-2 pr-3 text-right text-muted-foreground text-[11px]">—</td>
               <td className="py-2 pr-3 text-right">
                 <span className={`font-mono font-bold ${myMetrics.grossMarginPct >= 0 ? 'text-success' : 'text-destructive'}`}>
-                  {myPrice > 0 ? formatPct(myMetrics.grossMarginPct) : '—'}
+                  {myPrice > 0 ? formatPct(myMetrics.grossMarginPct, 'ratio') : '—'}
                 </span>
               </td>
               <td className="py-2 pr-3 text-right">
@@ -113,7 +113,7 @@ export default function CompetitorPriceBlock({ form, myResult }) {
               </td>
               <td className="py-2 pr-3 text-right">
                 <span className={`font-mono font-bold ${myMetrics.contributionPct >= 0 ? 'text-success' : 'text-destructive'}`}>
-                  {myPrice > 0 ? formatPct(myMetrics.contributionPct) : '—'}
+                  {myPrice > 0 ? formatPct(myMetrics.contributionPct, 'ratio') : '—'}
                 </span>
               </td>
               <td className="py-2 text-right text-muted-foreground text-[11px]">—</td>
@@ -125,7 +125,7 @@ export default function CompetitorPriceBlock({ form, myResult }) {
               const priceDelta = c.price > 0 && myPrice > 0 ? c.price - myPrice : null;
               const priceDeltaPct = priceDelta != null ? (priceDelta / myPrice) * 100 : null;
               const marginDelta = c.metrics && myPrice > 0
-                ? c.metrics.grossMarginPct - myMetrics.grossMarginPct
+                ? ratioToPercent(c.metrics.grossMarginPct - myMetrics.grossMarginPct)
                 : null;
 
               return (
@@ -161,7 +161,7 @@ export default function CompetitorPriceBlock({ form, myResult }) {
                   </td>
                   <td className="py-2 pr-3 text-right">
                     {c.metrics
-                      ? <span className={`font-mono font-bold ${c.metrics.grossMarginPct >= 0 ? 'text-success' : 'text-destructive'}`}>{formatPct(c.metrics.grossMarginPct)}</span>
+                      ? <span className={`font-mono font-bold ${c.metrics.grossMarginPct >= 0 ? 'text-success' : 'text-destructive'}`}>{formatPct(c.metrics.grossMarginPct, 'ratio')}</span>
                       : <span className="text-muted-foreground">—</span>
                     }
                   </td>
@@ -173,7 +173,7 @@ export default function CompetitorPriceBlock({ form, myResult }) {
                   </td>
                   <td className="py-2 pr-3 text-right">
                     {c.metrics
-                      ? <span className={`font-mono font-bold ${c.metrics.contributionPct >= 0 ? 'text-success' : 'text-destructive'}`}>{formatPct(c.metrics.contributionPct)}</span>
+                      ? <span className={`font-mono font-bold ${c.metrics.contributionPct >= 0 ? 'text-success' : 'text-destructive'}`}>{formatPct(c.metrics.contributionPct, 'ratio')}</span>
                       : <span className="text-muted-foreground">—</span>
                     }
                   </td>
@@ -208,12 +208,12 @@ export default function CompetitorPriceBlock({ form, myResult }) {
                   <div
                     className="h-4 rounded-full transition-all duration-500"
                     style={{
-                      width: `${Math.max(0, Math.min(100, myMetrics.grossMarginPct))}%`,
+                      width: `${Math.max(0, Math.min(100, ratioToPercent(myMetrics.grossMarginPct)))}%`,
                       background: myMetrics.grossMarginPct >= 0 ? 'hsl(var(--primary))' : 'hsl(var(--destructive))',
                     }}
                   />
                   <span className="absolute inset-0 flex items-center px-2 text-[10px] font-bold text-white mix-blend-difference">
-                    {formatPct(myMetrics.grossMarginPct)}
+                    {formatPct(myMetrics.grossMarginPct, 'ratio')}
                   </span>
                 </div>
                 <span className="text-[11px] font-mono font-bold text-foreground w-14 text-right flex-shrink-0">{formatRub(myPrice)}</span>
@@ -226,12 +226,12 @@ export default function CompetitorPriceBlock({ form, myResult }) {
                   <div
                     className="h-4 rounded-full transition-all duration-500"
                     style={{
-                      width: `${Math.max(0, Math.min(100, c.metrics.grossMarginPct))}%`,
+                      width: `${Math.max(0, Math.min(100, ratioToPercent(c.metrics.grossMarginPct)))}%`,
                       background: c.metrics.grossMarginPct >= 0 ? c.color : '#dc2626',
                     }}
                   />
                   <span className="absolute inset-0 flex items-center px-2 text-[10px] font-bold text-white mix-blend-difference">
-                    {formatPct(c.metrics.grossMarginPct)}
+                    {formatPct(c.metrics.grossMarginPct, 'ratio')}
                   </span>
                 </div>
                 <span className="text-[11px] font-mono font-bold text-muted-foreground w-14 text-right flex-shrink-0">{formatRub(c.price)}</span>

@@ -1,7 +1,9 @@
-import { Box, Truck, Megaphone, ShieldCheck } from 'lucide-react';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { Box, Truck, Megaphone, ShieldCheck, RefreshCw } from 'lucide-react';
 import LogisticsDirectionSelector from './LogisticsDirectionSelector';
 import PickupPointSelector from './PickupPointSelector';
-import { calculateLogisticsCost } from '@/lib/LogisticsService';
+import { calculateLogisticsCost, clearTariffCache, getTariffs } from '@/lib/LogisticsService';
+import { syncLogisticsDirectory } from '@/lib/MarketplaceAPI';
 
 const TAX_SYSTEMS = [
   { value: 'usn_income',         label: 'УСН Доходы',         hint: '% от выручки' },
@@ -28,20 +30,32 @@ const NumField = ({ label, value, onChange, suffix = '₽', step = '1' }) => (
   </div>
 );
 
-const Section = ({ icon: IconComp, title, color, children }) => (
+const Section = ({ icon: IconComp, title, color, action = null, children }) => (
   <div className="bg-card rounded-[18px] border border-border shadow-warm-sm p-4 flex flex-col min-w-0 h-fit">
-    <div className="flex items-center gap-1.5 mb-3">
-      <div className={`w-5 h-5 rounded-md flex items-center justify-center flex-shrink-0 ${color}`}>
-        <IconComp className="w-3 h-3" />
+    <div className="flex items-center justify-between gap-2 mb-3">
+      <div className="flex items-center gap-1.5 min-w-0">
+        <div className={`w-5 h-5 rounded-md flex items-center justify-center flex-shrink-0 ${color}`}>
+          <IconComp className="w-3 h-3" />
+        </div>
+        <span className="text-[10px] font-bold uppercase tracking-widest text-foreground truncate">{title}</span>
       </div>
-      <span className="text-[10px] font-bold uppercase tracking-widest text-foreground">{title}</span>
+      {action}
     </div>
     <div className="space-y-0">{children}</div>
   </div>
 );
 
-export default function CostInputsGrid({ form, setField, selectedProduct = null, directoriesMap = {} }) {
+export default function CostInputsGrid({ form, setField, selectedProduct = null, selectedClientId = null, directoriesMap = null }) {
+  const qc = useQueryClient();
+  const effectiveDirectoriesMap = directoriesMap || {};
   const isFBS = form.fulfillment_mode === 'FBS';
+  const syncMutation = useMutation({
+    mutationFn: () => syncLogisticsDirectory('wildberries', { clientId: selectedClientId }),
+    onSuccess: () => {
+      clearTariffCache();
+      qc.invalidateQueries({ queryKey: ['logistics-directories'] });
+    },
+  });
 
   const handleDirectionChange = (dirId) => {
     setField('logistics_direction', dirId);
@@ -50,7 +64,14 @@ export default function CostInputsGrid({ form, setField, selectedProduct = null,
   const handleTariffsLoad = (tariffs, dirId) => {
     // Используем полный расчет логистики если есть товар
     if (selectedProduct && dirId) {
-      const costBreakdown = calculateLogisticsCost(selectedProduct, form.fulfillment_mode, dirId, directoriesMap);
+      const logisticsProduct = {
+        ...selectedProduct,
+        weight_kg: form.weight_kg ?? selectedProduct.weight_kg,
+        size_length_cm: form.size_length_cm ?? selectedProduct.size_length_cm,
+        size_width_cm: form.size_width_cm ?? selectedProduct.size_width_cm,
+        size_height_cm: form.size_height_cm ?? selectedProduct.size_height_cm,
+      };
+      const costBreakdown = calculateLogisticsCost(logisticsProduct, form.fulfillment_mode, dirId, effectiveDirectoriesMap);
       
       if (isFBS) {
         setField('fbs_last_mile', costBreakdown.total);
@@ -83,11 +104,25 @@ export default function CostInputsGrid({ form, setField, selectedProduct = null,
         <NumField label="Доставка до WB"      value={form.cogs_inbound_to_wb} onChange={v => setField('cogs_inbound_to_wb', v)} />
         <NumField label="Брак"                value={form.waste_pct}        onChange={v => setField('waste_pct', v)} suffix="%" step="0.1" />
         <NumField label="Прочие расходы"      value={isFBS ? form.fbs_other : form.fbo_other} onChange={v => setField(isFBS ? 'fbs_other' : 'fbo_other', v)} />
-        <NumField label="Скидка"              value={form.promo_pct}        onChange={v => setField('promo_pct', v)} suffix="%" step="0.1" />
       </Section>
 
       {/* ЛОГИСТИКА */}
-      <Section icon={Truck} title="Логистика" color="bg-blue-100 text-blue-600">
+      <Section
+        icon={Truck}
+        title="Логистика"
+        color="bg-blue-100 text-blue-600"
+        action={(
+          <button
+            type="button"
+            onClick={() => syncMutation.mutate()}
+            disabled={!selectedClientId || syncMutation.isPending}
+            title={selectedClientId ? 'Синхронизировать ПВЗ WB' : 'Выберите товар клиента с WB token'}
+            className="w-7 h-7 rounded-md border border-border bg-secondary/40 text-muted-foreground hover:text-foreground hover:bg-secondary transition-colors disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center flex-shrink-0"
+          >
+            <RefreshCw className={`w-3.5 h-3.5 ${syncMutation.isPending ? 'animate-spin' : ''}`} />
+          </button>
+        )}
+      >
         <div className="mb-2 pb-2 border-b border-border/40 space-y-2">
           <LogisticsDirectionSelector
             direction={form.logistics_direction || 'moscow'}
@@ -95,13 +130,28 @@ export default function CostInputsGrid({ form, setField, selectedProduct = null,
             onDirectionChange={handleDirectionChange}
             onTariffsLoad={handleTariffsLoad}
             product={selectedProduct}
+            directoriesMap={effectiveDirectoriesMap}
           />
           <PickupPointSelector
             selectedPoint={form.pickup_point}
-            onPointChange={(pointId) => setField('pickup_point', pointId)}
+            onPointChange={(pointId, point) => {
+              setField('pickup_point', pointId);
+              if (point?.directionId) {
+                setField('logistics_direction', point.directionId);
+                handleTariffsLoad(
+                  getTariffs(point.directionId, form.fulfillment_mode, effectiveDirectoriesMap),
+                  point.directionId,
+                );
+              }
+            }}
             fulfillmentMode={form.fulfillment_mode}
-            directoriesMap={directoriesMap}
+            directoriesMap={effectiveDirectoriesMap}
           />
+          {syncMutation.isError && (
+            <div className="text-[10px] text-destructive leading-tight">
+              {syncMutation.error?.message || 'Ошибка синхронизации ПВЗ WB'}
+            </div>
+          )}
         </div>
         {isFBS ? (
           <>
@@ -117,18 +167,14 @@ export default function CostInputsGrid({ form, setField, selectedProduct = null,
             <NumField label="Прочее FBO"       value={form.fbo_other}        onChange={v => setField('fbo_other', v)} />
           </>
         )}
-        <NumField label="Возвратная логистика" value={form.return_loss} onChange={v => setField('return_loss', v)} />
       </Section>
 
       {/* МАРКЕТИНГ */}
       <Section icon={Megaphone} title="Маркетинг" color="bg-purple-100 text-purple-600">
-        <NumField label="Реклама (ACoS)"        value={form.paid_share_pct} onChange={v => setField('paid_share_pct', v)} suffix="%" step="0.1" />
-        <NumField label="Промо / акции"         value={form.promo_pct}      onChange={v => setField('promo_pct', v)}      suffix="%" step="0.1" />
-        <NumField label="CAC"                   value={form.cac}            onChange={v => setField('cac', v)} />
         <NumField label="Доля платного трафика" value={form.paid_share_pct} onChange={v => setField('paid_share_pct', v)} suffix="%" step="0.1" />
+        <NumField label="CAC / платный заказ"   value={form.cac}            onChange={v => setField('cac', v)} />
+        <NumField label="Промо / акции"         value={form.promo_pct}      onChange={v => setField('promo_pct', v)}      suffix="%" step="0.1" />
         <NumField label="Пост. расходы / мес."  value={form.fixed_monthly}  onChange={v => setField('fixed_monthly', v)} />
-        <NumField label="Платные услуги"        value={form.cac}            onChange={v => setField('cac', v)} />
-        <NumField label="Прочий маркетинг"      value={0}                   onChange={() => {}} />
       </Section>
 
       {/* НАЛОГИ И КОМИССИИ */}

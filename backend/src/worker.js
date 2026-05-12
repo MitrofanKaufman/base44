@@ -1,12 +1,22 @@
 import dotenv from 'dotenv';
 import { createJobWorker } from './queue.js';
+import { getPool } from './db.js';
+import {
+  ensureWildberriesCollectionTables,
+  processWbCollectProductJob,
+} from './wildberries-repository.js';
 
 dotenv.config();
+
+const pool = getPool();
+await ensureWildberriesCollectionTables(pool);
 
 const worker = createJobWorker(async (job) => {
   console.log(`[worker] job ${job.name}`, job.data);
 
   switch (job.name) {
+    case 'wb:collect:product':
+      return await processWbCollectProductJob(pool, job);
     case 'sync-client':
       return { ok: true, entity: 'Client', id: job.data.id };
     case 'sync-project':

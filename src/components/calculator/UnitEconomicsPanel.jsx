@@ -1,7 +1,9 @@
 import { TrendingUp, AlertCircle } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { ratioToPercent } from '@/lib/unitEconomics';
+import { buildCalculatorViewModel } from '@/lib/calculatorViewModel';
 
-const MetricCard = ({ label, value, suffix = '', trend, alert = false }) => (
+const MetricCard = ({ label, value, suffix = '', trend = 0, alert = false }) => (
   <div className={cn(
     'p-3 rounded-lg border transition-colors',
     alert ? 'bg-destructive/5 border-destructive/30' : 'bg-secondary/30 border-border/50'
@@ -39,23 +41,22 @@ export default function UnitEconomicsPanel({ form, result }) {
     );
   }
 
-  const {
-    price_net = 0,
-    revenue_net: _revenue_net = 0,
-    gross_profit = 0,
-    gross_margin_pct = 0,
-    contribution = 0,
-    contribution_pct = 0,
-    var_cost = 0,
-    cogs_with_waste = 0,
-    bep_units = 0,
-    is_profitable = false
-  } = result;
+  const priceNet = result.priceNet ?? 0;
+  const view = buildCalculatorViewModel(form, result);
+  const grossProfit = result.grossProfit ?? 0;
+  const grossMarginPct = result.grossMarginPct ?? 0;
+  const grossMarginDisplay = ratioToPercent(grossMarginPct);
+  const contribution = result.contribution ?? 0;
+  const contributionPct = result.contributionPct ?? 0;
+  const contributionDisplay = ratioToPercent(contributionPct);
+  const varCost = result.varCost ?? 0;
+  const cogsWithWaste = result.cogsWithWaste ?? 0;
+  const isProfitable = result.isProfitable ?? contribution > 0;
 
   // Рассчитываем дополнительные метрики
-  const roi = price_net > 0 ? ((contribution / cogs_with_waste) * 100) : 0;
-  const returnOnMarketing = form.cac > 0 && contribution > 0 
-    ? ((contribution / form.cac) - 1) * 100 
+  const roi = cogsWithWaste > 0 ? ((contribution / cogsWithWaste) * 100) : 0;
+  const returnOnMarketing = result.marketingCost > 0 && contribution > 0
+    ? ((contribution / result.marketingCost) - 1) * 100
     : 0;
 
   return (
@@ -68,7 +69,7 @@ export default function UnitEconomicsPanel({ form, result }) {
         <h3 className="text-[10px] font-bold uppercase tracking-widest text-foreground">
           Юнит-экономика
         </h3>
-        {is_profitable ? (
+        {isProfitable ? (
           <span className="ml-auto text-[9px] font-bold bg-success/10 text-success px-2 py-1 rounded">
             ✓ Прибыльно
           </span>
@@ -83,18 +84,18 @@ export default function UnitEconomicsPanel({ form, result }) {
       <div className="grid grid-cols-2 gap-2 mb-4">
         <MetricCard
           label="Цена продажи"
-          value={price_net.toFixed(0)}
+          value={priceNet.toFixed(0)}
           suffix="₽"
         />
         <MetricCard
           label="Маржинальность"
-          value={gross_margin_pct.toFixed(1)}
+          value={grossMarginDisplay.toFixed(1)}
           suffix="%"
-          trend={gross_margin_pct > 30 ? 1 : -1}
-          alert={gross_margin_pct < 15}
+          trend={grossMarginPct > 0.3 ? 1 : -1}
+          alert={grossMarginPct < 0.15}
         />
         <MetricCard
-          label="Чистая прибыль"
+          label="Contribution"
           value={contribution.toFixed(0)}
           suffix="₽"
           alert={contribution < 0}
@@ -107,20 +108,20 @@ export default function UnitEconomicsPanel({ form, result }) {
         />
         <MetricCard
           label="Себестоимость"
-          value={cogs_with_waste.toFixed(0)}
+          value={cogsWithWaste.toFixed(0)}
           suffix="₽"
         />
         <MetricCard
           label="Маржа %"
-          value={contribution_pct.toFixed(1)}
+          value={contributionDisplay.toFixed(1)}
           suffix="%"
-          alert={contribution_pct < 20}
+          alert={contributionPct < 0.2}
         />
       </div>
 
       {/* Дополнительные показатели */}
       <div className="space-y-2 mt-auto pt-3 border-t border-border/40">
-        {form.cac > 0 && (
+        {result.marketingCost > 0 && (
           <div className="flex items-center justify-between text-[10px]">
             <span className="text-muted-foreground">ROAS (CAC):</span>
             <span className={cn(
@@ -134,29 +135,31 @@ export default function UnitEconomicsPanel({ form, result }) {
         
         <div className="flex items-center justify-between text-[10px]">
           <span className="text-muted-foreground">Точка безубыточности:</span>
-          <span className="font-bold text-foreground">{Math.ceil(bep_units)} шт/мес</span>
+          <span className="font-bold text-foreground">
+            {view.bep.isReachable ? `${view.bep.display}/мес` : 'Не окупается'}
+          </span>
         </div>
 
         <div className="flex items-center justify-between text-[10px]">
           <span className="text-muted-foreground">Переменные затраты:</span>
-          <span className="font-bold text-foreground">{var_cost.toFixed(0)}₽</span>
+          <span className="font-bold text-foreground">{varCost.toFixed(0)}₽</span>
         </div>
 
         <div className="flex items-center justify-between text-[10px]">
           <span className="text-muted-foreground">Валовая прибыль:</span>
-          <span className="font-bold text-foreground">{gross_profit.toFixed(0)}₽</span>
+          <span className="font-bold text-foreground">{grossProfit.toFixed(0)}₽</span>
         </div>
       </div>
 
       {/* Рекомендация */}
-      {!is_profitable && contribution < 0 && (
+      {!isProfitable && contribution < 0 && (
         <div className="mt-4 p-2.5 rounded-lg bg-destructive/5 border border-destructive/30 text-[9px] text-destructive flex gap-2">
           <AlertCircle className="w-3 h-3 flex-shrink-0 mt-0.5" />
           <span>Товар убыточен. Увеличьте цену или снизьте затраты.</span>
         </div>
       )}
 
-      {is_profitable && contribution_pct < 20 && (
+      {isProfitable && contributionPct < 0.2 && (
         <div className="mt-4 p-2.5 rounded-lg bg-warning/5 border border-warning/30 text-[9px] text-warning flex gap-2">
           <AlertCircle className="w-3 h-3 flex-shrink-0 mt-0.5" />
           <span>Низкая маржа. Оптимизируйте себестоимость или посмотрите конкурентов.</span>

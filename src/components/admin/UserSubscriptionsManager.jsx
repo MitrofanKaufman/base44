@@ -24,7 +24,7 @@ export default function UserSubscriptionsManager() {
   });
 
   const createMutation = useMutation({
-    mutationFn: (data) => base44.entities.UserSubscription.create(data),
+    mutationFn: (/** @type {any} */ data) => base44.entities.UserSubscription.create(data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['userSubscriptions'] });
       setNewUserForm({ email: '', subscription_id: '', billing_cycle: 'monthly' });
@@ -32,7 +32,7 @@ export default function UserSubscriptionsManager() {
   });
 
   const updateMutation = useMutation({
-    mutationFn: (data) => base44.entities.UserSubscription.update(editingId, data),
+    mutationFn: (/** @type {any} */ data) => base44.entities.UserSubscription.update(editingId, data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['userSubscriptions'] });
       setEditingId(null);
@@ -41,7 +41,7 @@ export default function UserSubscriptionsManager() {
   });
 
   const deleteMutation = useMutation({
-    mutationFn: (id) => base44.entities.UserSubscription.delete(id),
+    mutationFn: (/** @type {string} */ id) => base44.entities.UserSubscription.delete(id),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['userSubscriptions'] });
     }

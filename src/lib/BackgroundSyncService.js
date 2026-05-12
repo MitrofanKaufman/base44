@@ -9,6 +9,7 @@ import { fetchProductDataFromMarketplace, syncLogisticsDirectory } from '@/lib/M
 export class BackgroundSyncService {
   static instance = null;
   static syncIntervals = {};
+  static syncTimers = {};
 
   static getInstance() {
     if (!BackgroundSyncService.instance) {
@@ -21,10 +22,11 @@ export class BackgroundSyncService {
    * Запустить фоновую синхронизацию
    */
   static start() {
-    const instance = BackgroundSyncService.getInstance();
-    instance.startLogisticsSyncInterval();
-    instance.startProductSyncInterval();
-    instance.startWildberriesSyncInterval();
+    BackgroundSyncService.stop();
+    BackgroundSyncService.getInstance();
+    BackgroundSyncService.startLogisticsSyncInterval();
+    BackgroundSyncService.startProductSyncInterval();
+    BackgroundSyncService.startWildberriesSyncInterval();
   }
 
   /**
@@ -32,7 +34,7 @@ export class BackgroundSyncService {
    */
   static startLogisticsSyncInterval() {
     // Первая синхронизация через 30 сек
-    setTimeout(() => {
+    BackgroundSyncService.syncTimers.logistics = setTimeout(() => {
       BackgroundSyncService.syncLogistics();
     }, 30000);
 
@@ -49,7 +51,7 @@ export class BackgroundSyncService {
    */
   static startProductSyncInterval() {
     // Первая синхронизация через 1 минуту
-    setTimeout(() => {
+    BackgroundSyncService.syncTimers.products = setTimeout(() => {
       BackgroundSyncService.syncActiveProducts();
     }, 60000);
 
@@ -66,14 +68,15 @@ export class BackgroundSyncService {
    */
   static async syncLogistics() {
     try {
-      const marketplaces = ['wildberries', 'yandex', 'ozon'];
-      
-      for (const marketplace of marketplaces) {
+      const clients = await base44.entities.Client.filter({ status: 'active' }, '-updated_date', 100);
+      const wbClients = clients.filter(client => client.wb_api_token);
+
+      for (const client of wbClients) {
         try {
-          await syncLogisticsDirectory(marketplace);
-          console.log(`✓ Logistics synced for ${marketplace}`);
+          await syncLogisticsDirectory('wildberries', { clientId: client.id });
+          console.log(`✓ Logistics synced for ${client.name || client.id}`);
         } catch (e) {
-          console.error(`✗ Failed to sync ${marketplace} logistics:`, e);
+          console.error(`✗ Failed to sync logistics for ${client.name || client.id}:`, e);
         }
       }
     } catch (error) {
@@ -147,7 +150,11 @@ export class BackgroundSyncService {
     Object.values(BackgroundSyncService.syncIntervals).forEach(interval => {
       clearInterval(interval);
     });
+    Object.values(BackgroundSyncService.syncTimers).forEach(timer => {
+      clearTimeout(timer);
+    });
     BackgroundSyncService.syncIntervals = {};
+    BackgroundSyncService.syncTimers = {};
     SyncScheduler.stop();
   }
 }

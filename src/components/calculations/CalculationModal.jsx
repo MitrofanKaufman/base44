@@ -7,6 +7,8 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { calculate, formatRub, formatPct } from '@/lib/unitEconomics';
+import { buildCalculatorViewModel } from '@/lib/calculatorViewModel';
+import { buildCalculationPayload } from '@/lib/calculationPayload';
 
 const Field = ({ label, value, onChange, type = 'number', hint, step = '0.01' }) => (
   <div className="space-y-1">
@@ -44,11 +46,13 @@ export default function CalculationModal({ calculation, products, projects, clie
 
   const initProductId = calculation?.product_id || preProductId || products[0]?.id || '';
   const initProduct   = productMap[initProductId];
+  const initProjectId = calculation?.project_id || initProduct?.project_id || projects[0]?.id || '';
+  const initProject = projectMap[initProjectId];
 
   const [form, setForm] = useState({
     name:               calculation?.name               || '',
     product_id:         initProductId,
-    project_id:         calculation?.project_id         || initProduct?.project_id || projects[0]?.id || '',
+    project_id:         initProjectId,
     fulfillment_mode:   calculation?.fulfillment_mode   || initProduct?.fulfillment_mode || 'FBO',
     price:              calculation?.price_net           ?? initProduct?.sale_price ?? initProduct?.price ?? 0,
     wb_commission_pct:  calculation?.wb_commission_pct  ?? initProduct?.wb_commission_pct ?? 15,
@@ -71,7 +75,7 @@ export default function CalculationModal({ calculation, products, projects, clie
     return_loss:        calculation?.return_loss        ?? 0,
     cac:                calculation?.cac                ?? 0,
     paid_share_pct:     calculation?.paid_share_pct     ?? 0,
-    fixed_monthly:      calculation?.fixed_monthly      ?? projectMap[calculation?.project_id]?.fixed_monthly ?? 0,
+    fixed_monthly:      calculation?.fixed_monthly      ?? initProject?.fixed_monthly ?? 0,
   });
 
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
@@ -79,6 +83,7 @@ export default function CalculationModal({ calculation, products, projects, clie
   const onProductChange = (productId) => {
     const prod = productMap[productId];
     if (!prod) return;
+    const project = projectMap[prod.project_id];
     setForm(f => ({
       ...f,
       product_id:        productId,
@@ -86,31 +91,16 @@ export default function CalculationModal({ calculation, products, projects, clie
       fulfillment_mode:  prod.fulfillment_mode || f.fulfillment_mode,
       price:             prod.sale_price || prod.price || f.price,
       wb_commission_pct: prod.wb_commission_pct || f.wb_commission_pct,
+      fixed_monthly:     project?.fixed_monthly ?? f.fixed_monthly,
     }));
   };
 
   const result = calculate(form);
+  const view = buildCalculatorViewModel(form, result);
 
   const mut = useMutation({
     mutationFn: (data) => {
-      const prod = productMap[data.product_id];
-      const proj = projectMap[data.project_id];
-      const payload = {
-        ...data,
-        client_id:        proj?.client_id || prod?.client_id,
-        price_net:        result.priceNet,
-        revenue_net:      result.revenueNet,
-        cogs_base:        result.cogsBase,
-        cogs_with_waste:  result.cogsWithWaste,
-        var_cost:         result.varCost,
-        gross_profit:     result.grossProfit,
-        gross_margin_pct: result.grossMarginPct,
-        marketing_cost:   result.marketingCost,
-        contribution:     result.contribution,
-        contribution_pct: result.contributionPct,
-        bep_units:        result.bepUnits,
-        is_profitable:    result.isProfitable,
-      };
+      const payload = buildCalculationPayload(data, result, { productMap, projectMap });
       return isEdit
         ? base44.entities.Calculation.update(calculation.id, payload)
         : base44.entities.Calculation.create(payload);
@@ -243,20 +233,20 @@ export default function CalculationModal({ calculation, products, projects, clie
                   <p className={`text-xl font-bold ${result.isProfitable ? 'text-success' : 'text-destructive'}`}>
                     {formatRub(result.contribution)}
                   </p>
-                  <p className="text-xs text-muted-foreground mt-0.5">{formatPct(result.contributionPct)}</p>
+                  <p className="text-xs text-muted-foreground mt-0.5">{formatPct(result.contributionPct, 'ratio')}</p>
                 </div>
 
                 <div className="bg-card rounded-md border border-border p-4">
                   <p className="text-[11px] text-muted-foreground font-medium mb-2">Валовая маржа</p>
-                  <p className="text-xl font-bold">{formatPct(result.grossMarginPct)}</p>
+                  <p className="text-xl font-bold">{formatPct(result.grossMarginPct, 'ratio')}</p>
                   <p className="text-xs text-muted-foreground mt-0.5">{formatRub(result.grossProfit)}</p>
                 </div>
 
-                {result.bepUnits != null && (
+                {(view.bep.isReachable || view.bep.status === 'unreachable') && (
                   <div className="bg-card rounded-md border border-border p-4 col-span-2">
                     <p className="text-[11px] text-muted-foreground font-medium mb-2">Точка безубыточности</p>
-                    <p className={`text-xl font-bold ${result.isProfitable ? 'text-foreground' : 'text-destructive'}`}>
-                      {result.isProfitable ? `${Math.ceil(result.bepUnits)} шт/мес` : 'Не окупается'}
+                    <p className={`text-xl font-bold ${view.bep.isReachable ? 'text-foreground' : 'text-destructive'}`}>
+                      {view.bep.isReachable ? `${view.bep.display}/мес` : 'Не окупается'}
                     </p>
                   </div>
                 )}

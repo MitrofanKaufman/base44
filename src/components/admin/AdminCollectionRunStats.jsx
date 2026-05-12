@@ -42,7 +42,7 @@ export default function AdminCollectionRunStats() {
 
     // Сортируем по дате и преобразуем в массив
     return Object.entries(grouped)
-      .sort((a, b) => new Date(a[0]) - new Date(b[0]))
+      .sort((a, b) => new Date(a[0]).getTime() - new Date(b[0]).getTime())
       .slice(-14) // Последние 14 дней
       .map(([date, counts]) => ({
         date,
@@ -139,7 +139,7 @@ export default function AdminCollectionRunStats() {
             <Line
               type="monotone"
               dataKey={(d) => {
-                return d.success > 0 ? ((d.success / d.total) * 100).toFixed(1) : 0;
+                return d.success > 0 ? (d.success / d.total) * 100 : 0;
               }}
               stroke="#10b981"
               strokeWidth={2}

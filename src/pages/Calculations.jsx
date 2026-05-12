@@ -120,6 +120,7 @@ export default function Calculations() {
             const profitable = calc.is_profitable;
             const isFBS      = calc.fulfillment_mode === 'FBS';
             const contribPos = (calc.contribution ?? 0) >= 0;
+            const showBep = profitable && Number.isFinite(calc.bep_units) && calc.bep_units > 0;
 
             return (
               <div
@@ -187,9 +188,9 @@ export default function Calculations() {
 
                 {/* BEP */}
                 <div className="col-span-1 text-right hidden lg:block">
-                  {calc.bep_units
+                  {showBep
                     ? <p className="text-sm font-semibold">{Math.ceil(calc.bep_units)} шт</p>
-                    : <p className="text-xs text-muted-foreground">—</p>
+                    : <p className="text-xs text-muted-foreground">{profitable === false ? 'Не окупается' : '—'}</p>
                   }
                 </div>
 

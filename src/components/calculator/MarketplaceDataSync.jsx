@@ -4,7 +4,7 @@ import { RefreshCw, AlertCircle, CheckCircle, Loader } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { fetchProductDataFromMarketplace } from '@/lib/MarketplaceAPI';
 
-export default function MarketplaceDataSync({ productId, selectedProduct, onDataUpdate, form: _form }) {
+export default function MarketplaceDataSync({ productId, selectedProduct, onDataUpdate }) {
   const [status, setStatus] = useState(null);
   const [error, setError] = useState(null);
 

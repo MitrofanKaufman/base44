@@ -10,7 +10,8 @@ export default function LogisticsDirectionSelector({
   fulfillmentMode, 
   onDirectionChange, 
   onTariffsLoad,
-  product = null 
+  product = null,
+  directoriesMap: externalDirectoriesMap = null,
 }) {
   const [open, setOpen] = useState(false);
   const [availableDirections, setAvailableDirections] = useState([]);
@@ -20,11 +21,18 @@ export default function LogisticsDirectionSelector({
   const { data: dbDirectories = [] } = useQuery({
     queryKey: ['logistics-directories'],
     queryFn: () => base44.entities.LogisticsDirectory.list('-synced_at', 100),
-    refetchInterval: 3600000
+    refetchInterval: 3600000,
+    enabled: !externalDirectoriesMap,
   });
 
   // Индексируем справочники по источнику
   useEffect(() => {
+    if (externalDirectoriesMap) {
+      setDirectoryMap(externalDirectoriesMap);
+      clearTariffCache();
+      return;
+    }
+
     if (dbDirectories.length > 0) {
       const bySource = {};
       dbDirectories.forEach(dir => {
@@ -34,7 +42,7 @@ export default function LogisticsDirectionSelector({
       setDirectoryMap(bySource);
       clearTariffCache(); // очищаем кеш при обновлении справочников
     }
-  }, [dbDirectories]);
+  }, [dbDirectories, externalDirectoriesMap]);
 
   // Получаем доступные направления на основе справочников
   useEffect(() => {

@@ -1,24 +1,24 @@
-import { useState } from 'react';
-import { calculate } from '@/lib/unitEconomics';
+import { useMemo, useState } from 'react';
+import { calculate, formatPct } from '@/lib/unitEconomics';
+import { calculateRecommendedPrice } from '@/lib/priceRecommendation';
 import { Zap, TrendingUp } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 
 export default function PriceRecommendationPanel({ form, setField, result }) {
   const [targetMargin, setTargetMargin] = useState(30);
 
-  // Рассчитываем все переменные затраты на единицу
+  const normalizedTargetMargin = Math.max(0, Math.min(95, targetMargin));
+  const recommendedPrice = useMemo(() => {
+    return calculateRecommendedPrice(form, result, { targetMarginPct: normalizedTargetMargin });
+  }, [form, normalizedTargetMargin, result]);
   const varCosts = result.varCost || 0;
-  
-  // Рекомендованная цена = Затраты / (1 - желаемая маржа)
-  const recommendedPrice = varCosts > 0 
-    ? Math.round((varCosts / (1 - targetMargin / 100)) * 100) / 100
-    : 0;
 
   const handleApplyPrice = () => {
     setField('price', recommendedPrice);
   };
 
   const projectedResult = calculate({ ...form, price: recommendedPrice });
+  const projectedContributionTarget = normalizedTargetMargin / 100;
 
   return (
     <div className="bg-card rounded-lg border border-border shadow-warm-sm p-3">
@@ -30,15 +30,15 @@ export default function PriceRecommendationPanel({ form, setField, result }) {
       {/* Желаемая маржинальность */}
       <div className="mb-3 pb-3 border-b border-border/40">
         <div className="flex items-center justify-between gap-2 mb-2">
-          <span className="text-[11px] text-muted-foreground">Желаемая маржинальность</span>
+          <span className="text-[11px] text-muted-foreground">Желаемая contribution margin</span>
           <div className="flex items-center gap-1">
             <input
               type="number"
               min="0"
-              max="100"
+              max="95"
               step="1"
               value={targetMargin}
-              onChange={e => setTargetMargin(Math.max(0, Math.min(100, +e.target.value)))}
+              onChange={e => setTargetMargin(Math.max(0, Math.min(95, +e.target.value)))}
               className="w-12 h-6 bg-secondary/40 border border-border rounded px-1 text-[11px] font-bold text-right focus:outline-none focus:ring-1 focus:ring-ring"
             />
             <span className="text-[10px] text-muted-foreground">%</span>
@@ -47,7 +47,7 @@ export default function PriceRecommendationPanel({ form, setField, result }) {
         <div className="w-full bg-secondary/30 rounded-full h-1.5">
           <div
             className="h-1.5 bg-primary rounded-full transition-all"
-            style={{ width: `${targetMargin}%` }}
+            style={{ width: `${normalizedTargetMargin}%` }}
           />
         </div>
       </div>
@@ -59,8 +59,8 @@ export default function PriceRecommendationPanel({ form, setField, result }) {
           <span className="font-mono font-bold">{varCosts.toFixed(2)} ₽</span>
         </div>
         <div className="flex justify-between">
-          <span className="text-muted-foreground">Целевая маржа:</span>
-          <span className="font-mono font-bold">{targetMargin}%</span>
+            <span className="text-muted-foreground">Целевой contribution:</span>
+            <span className="font-mono font-bold">{normalizedTargetMargin}%</span>
         </div>
         <div className="flex justify-between py-1.5 border-t border-border/40">
           <span className="font-semibold text-foreground">Рекомендованная цена:</span>
@@ -82,9 +82,9 @@ export default function PriceRecommendationPanel({ form, setField, result }) {
             </span>
           </div>
           <div className="flex justify-between">
-            <span className="text-muted-foreground">Маржинальность:</span>
-            <span className={`font-mono font-bold ${projectedResult.grossMarginPct >= targetMargin - 2 ? 'text-success' : 'text-warning'}`}>
-              {projectedResult.grossMarginPct?.toFixed(1) || '—'}%
+            <span className="text-muted-foreground">Contribution %:</span>
+            <span className={`font-mono font-bold ${projectedResult.contributionPct >= projectedContributionTarget - 0.02 ? 'text-success' : 'text-warning'}`}>
+              {formatPct(projectedResult.contributionPct, 'ratio')}
             </span>
           </div>
         </div>

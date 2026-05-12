@@ -1,4 +1,5 @@
 import { formatRub, formatPct } from '@/lib/unitEconomics';
+import { buildBepView } from '@/lib/calculatorViewModel';
 
 const Row = ({ label, value, sub, indent, bold, positive, negative }) => (
   <div className={`flex items-center justify-between py-2 border-b border-border last:border-0 ${indent ? 'pl-4' : ''} ${bold ? 'font-semibold' : ''}`}>
@@ -23,6 +24,8 @@ const Section = ({ title, children }) => (
 );
 
 export default function PnlBreakdown({ result, form: _form }) {
+  const bep = buildBepView(result);
+
   return (
     <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
 
@@ -47,12 +50,12 @@ export default function PnlBreakdown({ result, form: _form }) {
 
       {/* Profit */}
       <Section title="Прибыль">
-        <Row label="Валовая прибыль"  value={formatRub(result.grossProfit)}  bold positive={result.grossProfit >= 0} negative={result.grossProfit < 0} sub={formatPct(result.grossMarginPct)} />
+        <Row label="Валовая прибыль"  value={formatRub(result.grossProfit)}  bold positive={result.grossProfit >= 0} negative={result.grossProfit < 0} sub={formatPct(result.grossMarginPct, 'ratio')} />
         <Row label="− Маркетинг"      value={`−${formatRub(result.marketingCost)}`} indent />
         <Row
           label="Contribution margin"
           value={formatRub(result.contribution)}
-          sub={formatPct(result.contributionPct)}
+          sub={formatPct(result.contributionPct, 'ratio')}
           bold
           positive={result.contribution >= 0}
           negative={result.contribution < 0}
@@ -74,14 +77,14 @@ export default function PnlBreakdown({ result, form: _form }) {
             {result.isProfitable ? '✓ Прибыльно' : '✗ Убыточно'}
           </p>
         </div>
-        {result.bepUnits != null && result.isProfitable && (
+        {bep.isReachable && (
           <div className="text-center py-2 bg-accent rounded-md">
             <p className="text-xs text-muted-foreground">BEP</p>
-            <p className="text-lg font-bold text-foreground">{Math.ceil(result.bepUnits)} шт/мес</p>
+            <p className="text-lg font-bold text-foreground">{bep.display}/мес</p>
             <p className="text-[10px] text-muted-foreground">точка безубыточности</p>
           </div>
         )}
-        {!result.isProfitable && (
+        {!bep.isReachable && (
           <p className="text-xs text-center text-destructive bg-red-50 border border-red-200 rounded-md p-2">
             Точка безубыточности недостижима при текущих вводных
           </p>

@@ -5,6 +5,28 @@
 
 const TARIFF_CACHE = {}; // кешируем тарифы для быстрого доступа
 
+const toNumber = (value) => {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : 0;
+};
+
+const roundMoney = (value) => Math.round(value * 100) / 100;
+
+export function getProductVolumeLiters(product = {}) {
+  const length = toNumber(product.size_length_cm ?? product.sizeLengthCm);
+  const width = toNumber(product.size_width_cm ?? product.sizeWidthCm);
+  const height = toNumber(product.size_height_cm ?? product.sizeHeightCm);
+  if (!length || !width || !height) return 0;
+  return roundMoney((length * width * height) / 1000);
+}
+
+export function getBillableWeightKg(product = {}) {
+  const weightKg = toNumber(product.weight_kg ?? product.weightKg);
+  const volumeLiters = getProductVolumeLiters(product);
+  const volumetricWeightKg = volumeLiters / 5;
+  return roundMoney(Math.max(weightKg, volumetricWeightKg));
+}
+
 /**
  * Получить тарифы для товара и направления
  * @param {string} direction - направление доставки (moscow, spb и т.д.)
@@ -56,14 +78,19 @@ export function getTariffs(direction, mode, directoriesMap = {}) {
 export function calculateLogisticsCost(product, mode, direction, directoriesMap = {}) {
   const tariffs = getTariffs(direction, mode, directoriesMap);
 
-  const weightKg = product.weight_kg || 0;
+  const weightKg = toNumber(product?.weight_kg ?? product?.weightKg);
+  const volumeLiters = getProductVolumeLiters(product);
+  const billableWeightKg = getBillableWeightKg(product);
   const baseCost = tariffs.base;
-  const weightCost = Math.max(0, weightKg - 0.05) * (tariffs.per_kg || 0); // первые 50г включены в базовую ставку
+  const weightCost = Math.max(0, billableWeightKg - 0.05) * (tariffs.per_kg || 0); // первые 50г включены в базовую ставку
 
   return {
     base: baseCost,
-    weight: Math.round(weightCost * 100) / 100,
-    total: Math.round((baseCost + weightCost) * 100) / 100,
+    weightKg,
+    volumeLiters,
+    billableWeightKg,
+    weight: roundMoney(weightCost),
+    total: roundMoney(baseCost + weightCost),
     storage: tariffs.storage,
     source: tariffs.source
   };
@@ -130,9 +157,10 @@ export function checkFulfillmentCompatibility(product, mode) {
   const restrictions = [];
 
   // Товары более 25кг или 25л могут быть недоступны в FBS
-  const volumeLiters = product.weight_kg || 0;
-  if (mode === 'FBS' && product.weight_kg > 25) {
-    restrictions.push('Товар тяжелее 25кг недоступен для FBS');
+  const weightKg = toNumber(product.weight_kg ?? product.weightKg);
+  const volumeLiters = getProductVolumeLiters(product);
+  if (mode === 'FBS' && (weightKg > 25 || volumeLiters > 25)) {
+    restrictions.push('Товар тяжелее 25кг или больше 25л недоступен для FBS');
   }
 
   // Хрупкие товары требуют специальной упаковки в FBS

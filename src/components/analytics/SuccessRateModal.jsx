@@ -20,7 +20,7 @@ export default function SuccessRateModal({ isOpen, onClose, data }) {
     });
 
     const chartData = Object.entries(dailyStats)
-      .sort((a, b) => new Date(a[0]) - new Date(b[0]))
+      .sort((a, b) => new Date(a[0]).getTime() - new Date(b[0]).getTime())
       .map(([date, stats]) => ({
         date,
         successRate: stats.total > 0 ? (stats.completed / stats.total) * 100 : 0,
@@ -47,7 +47,7 @@ export default function SuccessRateModal({ isOpen, onClose, data }) {
                 <XAxis dataKey="date" />
                 <YAxis domain={[0, 100]} label={{ value: '%', angle: -90, position: 'insideLeft' }} />
                 <Tooltip
-                  formatter={(value) => value.toFixed(2)}
+                  formatter={(value) => Number(value).toFixed(2)}
                   labelFormatter={(label) => `Дата: ${label}`}
                   contentStyle={{ backgroundColor: 'hsl(var(--card))', border: '1px solid hsl(var(--border))' }}
                 />

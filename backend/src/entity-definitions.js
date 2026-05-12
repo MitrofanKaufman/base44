@@ -16,7 +16,7 @@ export const entityDefinitions = {
       name: { db: 'name', schema: t.string('Название клиента / компании') },
       email: { db: 'email', schema: t.string('Email клиента') },
       phone: { db: 'phone', schema: t.string('Телефон') },
-      wb_api_token: { db: 'wb_api_token', schema: t.string('API токен Wildberries (статистика)') },
+      wb_api_token: { db: 'wb_api_token', schema: t.string('WB Seller API token') },
       wb_api_token_ads: { db: 'wb_api_token_ads', schema: t.string('API токен WB (реклама)') },
       status: { db: 'status', schema: t.string('', { enum: ['active', 'inactive', 'trial'] }) },
       notes: { db: 'notes', schema: t.string('Заметки') },

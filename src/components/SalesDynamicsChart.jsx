@@ -11,9 +11,9 @@ import { TrendingUp, TrendingDown } from 'lucide-react';
  * Принимает массив calculations (уже отсортированных по дате).
  * productFilter — опциональный product_id для фильтрации.
  */
-export default function SalesDynamicsChart({ calculations, productFilter, title = 'Динамика расчётов' }) {
+export default function SalesDynamicsChart({ calculations, productFilter = null, title = 'Динамика расчётов' }) {
   const data = useMemo(() => {
-    let src = [...calculations].sort((a, b) => new Date(a.created_date) - new Date(b.created_date));
+    let src = [...calculations].sort((a, b) => new Date(a.created_date).getTime() - new Date(b.created_date).getTime());
     if (productFilter) src = src.filter(c => c.product_id === productFilter);
     return src.slice(-20).map((c, i) => ({
       name:        c.name?.slice(0, 14) || `#${i + 1}`,

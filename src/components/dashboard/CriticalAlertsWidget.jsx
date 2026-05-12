@@ -44,7 +44,7 @@ export default function CriticalAlertsWidget() {
 
   Object.entries(grouped).forEach(([productId, items]) => {
     if (items.length < 2) return;
-    const sorted = items.sort((a, b) => new Date(a.date) - new Date(b.date));
+    const sorted = items.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
     const first = sorted[0].margin_pct || 0;
     const last = sorted[sorted.length - 1].margin_pct || 0;
     const drop = first - last;
@@ -65,7 +65,7 @@ export default function CriticalAlertsWidget() {
   const priceAlerts = [];
   const latestByProduct = {};
   priceHistory.forEach(ph => {
-    if (!latestByProduct[ph.product_id] || new Date(ph.date) > new Date(latestByProduct[ph.product_id].date)) {
+    if (!latestByProduct[ph.product_id] || new Date(ph.date).getTime() > new Date(latestByProduct[ph.product_id].date).getTime()) {
       latestByProduct[ph.product_id] = ph;
     }
   });

@@ -4,7 +4,7 @@ import { base44 } from '@/api/base44Client';
 import { Users, Plus, Loader2, AlertCircle, TrendingDown, TrendingUp } from 'lucide-react';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { formatRub, formatPct } from '@/lib/unitEconomics';
+import { formatRub, formatPct, normalizePercentLike } from '@/lib/unitEconomics';
 import { cn } from '@/lib/utils';
 
 export default function CompetitorComparisonPanel() {
@@ -32,6 +32,7 @@ export default function CompetitorComparisonPanel() {
   const selectedCalc = selectedProductId
     ? calculations.find(c => c.product_id === selectedProductId)
     : null;
+  const selectedCalcGrossMarginPct = normalizePercentLike(selectedCalc?.gross_margin_pct ?? 0);
 
   const handleImportCompetitor = async () => {
     if (!competitorSku || !competitorName || !selectedProductId) {
@@ -142,9 +143,9 @@ export default function CompetitorComparisonPanel() {
               <span className="text-muted-foreground">Маржа:</span>
               <span className={cn(
                 'font-bold',
-                (selectedCalc.gross_margin_pct ?? 0) >= 15 ? 'text-success' : 'text-warning'
+                selectedCalcGrossMarginPct >= 15 ? 'text-success' : 'text-warning'
               )}>
-                {formatPct(selectedCalc.gross_margin_pct)}
+                {formatPct(selectedCalcGrossMarginPct, 'percent')}
               </span>
             </div>
             <div className="flex items-center justify-between">
@@ -257,12 +258,12 @@ export default function CompetitorComparisonPanel() {
                           {priceDiff < 0 ? (
                             <>
                               <TrendingDown className="w-3 h-3" />
-                              {formatPct(Math.abs(priceDiff))} дешевле
+                              {formatPct(Math.abs(priceDiff), 'percent')} дешевле
                             </>
                           ) : (
                             <>
                               <TrendingUp className="w-3 h-3" />
-                              {formatPct(priceDiff)} дороже
+                              {formatPct(priceDiff, 'percent')} дороже
                             </>
                           )}
                         </span>
@@ -275,13 +276,13 @@ export default function CompetitorComparisonPanel() {
                     <div className="p-2 bg-card/50 rounded-lg">
                       <div className="text-[9px] text-muted-foreground mb-0.5">Наша комиссия</div>
                       <div className="text-xs font-bold text-foreground">
-                        {formatPct(selectedProduct.wb_commission_pct || 15)}
+                        {formatPct(selectedProduct.wb_commission_pct || 15, 'percent')}
                       </div>
                     </div>
                     <div className="p-2 bg-card/50 rounded-lg">
                       <div className="text-[9px] text-muted-foreground mb-0.5">Комиссия конкурента</div>
                       <div className="text-xs font-bold text-foreground">
-                        {formatPct(competitor.data.commission_pct)}
+                        {formatPct(competitor.data.commission_pct, 'percent')}
                       </div>
                     </div>
                   </div>

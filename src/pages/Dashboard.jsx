@@ -163,6 +163,7 @@ export default function Dashboard() {
       {calculations.length >= 2 && (
         <SalesDynamicsChart
           calculations={calculations}
+          productFilter={null}
           title="Динамика Contribution по расчётам"
         />
       )}

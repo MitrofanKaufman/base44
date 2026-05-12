@@ -44,7 +44,7 @@ export default function AdminScheduledTasks() {
   });
 
   const runTaskMutation = useMutation({
-    mutationFn: async (taskId) => {
+    mutationFn: async (/** @type {string} */ taskId) => {
       setTaskStatus(s => ({ ...s, [taskId]: 'running' }));
       
       try {

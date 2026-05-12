@@ -1,7 +1,7 @@
 import { useMemo } from 'react';
 import { AlertTriangle, TrendingDown, ArrowRight } from 'lucide-react';
 import { Link } from 'react-router-dom';
-import { formatPct, formatRub } from '@/lib/unitEconomics';
+import { formatPct, formatRub, normalizePercentLike } from '@/lib/unitEconomics';
 
 const ONE_MONTH_MS = 30 * 24 * 60 * 60 * 1000;
 
@@ -25,7 +25,7 @@ export default function AlertsWidget({ calculations, products }) {
 
     const result = [];
     for (const [productId, { calc, ts }] of Object.entries(byProduct)) {
-      const margin = calc.gross_margin_pct ?? calc.contribution_pct ?? 0;
+      const margin = normalizePercentLike(calc.gross_margin_pct ?? calc.contribution_pct ?? 0);
       const isNeg = margin < 0;
       const isLow = margin >= 0 && margin < 5;
       const isRecent = ts >= cutoff;
@@ -98,7 +98,7 @@ export default function AlertsWidget({ calculations, products }) {
               </div>
               <div className="flex items-center gap-3 mt-0.5">
                 <span className={`text-xs font-bold ${isNeg ? 'text-destructive' : 'text-amber-600'}`}>
-                  Маржа: {formatPct(margin)}
+                  Маржа: {formatPct(margin, 'percent')}
                 </span>
                 <span className={`text-xs ${contribution < 0 ? 'text-destructive' : 'text-muted-foreground'}`}>
                   Contribution: {formatRub(contribution)}

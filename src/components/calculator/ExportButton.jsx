@@ -1,10 +1,12 @@
 import { useState } from 'react';
 import { Download, FileSpreadsheet, FileText, ChevronDown } from 'lucide-react';
-import { formatRub, formatPct } from '@/lib/unitEconomics';
+import { formatRub, formatPct, ratioToPercent } from '@/lib/unitEconomics';
+import { buildCalculatorViewModel } from '@/lib/calculatorViewModel';
 import jsPDF from 'jspdf';
 
 // Excel export via CSV (no extra deps)
 function exportToExcel(form, result, productName, versionName) {
+  const view = buildCalculatorViewModel(form, result);
   const rows = [
     ['Юнит-экономика — ' + (productName || 'Товар'), ''],
     ['Версия', versionName || ''],
@@ -38,10 +40,10 @@ function exportToExcel(form, result, productName, versionName) {
     ['', ''],
     ['ИТОГ', ''],
     ['Валовая прибыль', result.grossProfit],
-    ['Валовая маржа (%)', result.grossMarginPct],
+    ['Валовая маржа (%)', ratioToPercent(result.grossMarginPct)],
     ['Contribution margin', result.contribution],
-    ['Contribution (%)', result.contributionPct],
-    ['BEP (шт/мес)', result.bepUnits ? Math.ceil(result.bepUnits) : '—'],
+    ['Contribution (%)', ratioToPercent(result.contributionPct)],
+    ['BEP (шт/мес)', view.bep.isReachable ? view.bep.display : 'Не окупается'],
     ['Прибыльность', result.isProfitable ? 'Прибыльно ✓' : 'Убыточно ✗'],
   ];
 
@@ -57,6 +59,7 @@ function exportToExcel(form, result, productName, versionName) {
 }
 
 function exportToPdf(form, result, productName, versionName) {
+  const view = buildCalculatorViewModel(form, result);
   const doc = new jsPDF({ unit: 'mm', format: 'a4' });
   const W = 210;
   let y = 18;
@@ -132,10 +135,10 @@ function exportToPdf(form, result, productName, versionName) {
   line('Маркетинг на единицу', formatRub(result.marketingCost), 0, true);
 
   section('Итоговые метрики');
-  line('Валовая маржа', formatPct(result.grossMarginPct));
+  line('Валовая маржа', formatPct(result.grossMarginPct, 'ratio'));
   line('Contribution margin', formatRub(result.contribution), 0, true);
-  line('Contribution %', formatPct(result.contributionPct), 0, true);
-  if (result.bepUnits) line('BEP (шт/мес)', `${Math.ceil(result.bepUnits)} шт`);
+  line('Contribution %', formatPct(result.contributionPct, 'ratio'), 0, true);
+  if (view.bep.isReachable) line('BEP (шт/мес)', view.bep.display);
   line('Постоянные расходы/мес', formatRub(form.fixed_monthly));
 
   y += 4;

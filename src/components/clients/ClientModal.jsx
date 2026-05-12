@@ -28,7 +28,7 @@ export default function ClientModal({ client, onClose }) {
   });
 
   const mut = useMutation({
-    mutationFn: (data) => isEdit
+    mutationFn: (/** @type {any} */ data) => isEdit
       ? base44.entities.Client.update(client.id, data)
       : base44.entities.Client.create(data),
     onSuccess: () => { qc.invalidateQueries({ queryKey: ['clients'] }); onClose(); },
@@ -79,7 +79,7 @@ export default function ClientModal({ client, onClose }) {
             </Select>
           </Field>
 
-          <Field label="WB API Token (статистика)">
+          <Field label="WB Seller API Token">
             <Input
               className="rounded-md font-mono text-xs"
               value={form.wb_api_token}

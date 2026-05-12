@@ -9,9 +9,10 @@ services:
         condition: service_healthy
     environment:
       - PORT=3000
+      - NODE_ENV=${NODE_ENV:-development}
       - DATABASE_URL=postgresql://${POSTGRES_USER:-base44}:${POSTGRES_PASSWORD:-base44}@postgres:5432/${POSTGRES_DB:-base44}
       - REDIS_URL=redis://redis:6379
-      - JWT_SECRET=${JWT_SECRET:-change-me-in-production}
+      - JWT_SECRET=${JWT_SECRET:-base44-local-development-secret}
       - JWT_EXPIRES_IN=${JWT_EXPIRES_IN:-7d}
       - AUTH_COOKIE_NAME=${AUTH_COOKIE_NAME:-base44_access_token}
       - CORS_ORIGIN=${CORS_ORIGIN:-http://localhost}
@@ -30,6 +31,7 @@ services:
       redis:
         condition: service_healthy
     environment:
+      - NODE_ENV=${NODE_ENV:-development}
       - DATABASE_URL=postgresql://${POSTGRES_USER:-base44}:${POSTGRES_PASSWORD:-base44}@postgres:5432/${POSTGRES_DB:-base44}
       - REDIS_URL=redis://redis:6379
     restart: unless-stopped
@@ -45,8 +47,8 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
-    ports:
-      - "8080:80"
+    expose:
+      - "80"
     environment:
       - VITE_BASE44_APP_ID=${VITE_BASE44_APP_ID}
       - VITE_BASE44_APP_BASE_URL=${VITE_BASE44_APP_BASE_URL}

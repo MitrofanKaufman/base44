@@ -1,35 +1,27 @@
-import { base44 } from '@/api/base44Client';
+import { apiRequest, base44 } from '@/api/base44Client';
 
 /**
  * Получить данные товара с маркетплейса
  */
 export async function fetchProductDataFromMarketplace(productId, marketplace = 'wildberries') {
-  try {
-    const response = await base44.integrations.Core.InvokeLLM({
-      prompt: `Get current marketplace data for product. Return JSON with: current_price (float), stock (int), commission_pct (float), minimal_price (float).
-      
-Product ID: ${productId}
-Marketplace: ${marketplace}
-
-Return ONLY valid JSON object, no other text.`,
-      response_json_schema: {
-        type: 'object',
-        properties: {
-          current_price: { type: 'number', description: 'Текущая цена на маркетплейсе' },
-          stock: { type: 'integer', description: 'Остаток товара' },
-          commission_pct: { type: 'number', description: 'Комиссия маркетплейса в %' },
-          minimal_price: { type: 'number', description: 'Минимальная рекомендуемая цена' }
-        }
-      },
-      add_context_from_internet: true,
-      model: 'gemini_3_flash'
-    });
-    
-    return response;
-  } catch (error) {
-    console.error('Error fetching marketplace data:', error);
-    throw error;
+  if (marketplace !== 'wildberries') {
+    throw new Error(`Unsupported marketplace: ${marketplace}`);
   }
+
+  const response = await apiRequest(`/wildberries/products/${encodeURIComponent(productId)}/sync`, {
+    method: 'POST',
+  });
+  const mapped = response.mapped || {};
+
+  return {
+    ...mapped,
+    current_price: mapped.current_price ?? mapped.sale_price ?? mapped.price ?? 0,
+    stock: mapped.stock ?? response.product?.stock ?? 0,
+    commission_pct: mapped.commission_pct ?? 0,
+    minimal_price: mapped.minimal_price ?? mapped.current_price ?? mapped.sale_price ?? mapped.price ?? 0,
+    collection: response,
+    persistence: response.persistence,
+  };
 }
 
 /**
@@ -52,29 +44,34 @@ export async function updateProductWithMarketplaceData(productId) {
   const product = await fetchProductFromDB(productId);
   if (!product) throw new Error('Product not found');
 
-  const marketplaceData = await fetchProductDataFromMarketplace(productId, 'wildberries');
-  
-  // Обновляем товар с новыми данными
-  const updated = await base44.entities.Product.update(productId, {
-    price: marketplaceData.current_price,
-    wb_commission_pct: marketplaceData.commission_pct
+  const response = await apiRequest(`/wildberries/products/${encodeURIComponent(productId)}/sync`, {
+    method: 'POST',
   });
 
-  // Сохраняем историю цены
-  try {
-    await base44.entities.PriceHistory.create({
-      product_id: productId,
-      date: new Date().toISOString(),
-      our_price: marketplaceData.current_price,
-      margin_pct: product.margin_pct || 0,
-      cost: product.cogs_purchase || 0,
-      competitors: []
-    });
-  } catch (e) {
-    console.error('Error saving price history:', e);
-  }
+  return response.persistence?.product || {
+    ...product,
+    ...(response.mapped || {}),
+  };
+}
 
-  return updated;
+export async function fetchWbProductPreview(article, options = {}) {
+  const normalized = String(article || '').trim();
+  if (!normalized) throw new Error('WB article is required');
+  const query = options.query
+    ? `?query=${encodeURIComponent(options.query)}`
+    : '';
+  return apiRequest(`/wildberries/products/${encodeURIComponent(normalized)}/preview${query}`);
+}
+
+export async function enqueueWbProductCollection(payload) {
+  return apiRequest('/wildberries/jobs', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function listWbProductCollectionJobs(limit = 100) {
+  return apiRequest(`/wildberries/jobs?limit=${encodeURIComponent(limit)}`);
 }
 
 /**
@@ -94,72 +91,36 @@ export async function fetchLogisticsData(marketplace = 'wildberries', direction 
   }
 }
 
+export async function getWbSellerTokenMeta(clientId) {
+  if (!clientId) return { hasToken: false };
+  return apiRequest(`/wildberries/clients/${encodeURIComponent(clientId)}/seller-token`);
+}
+
+export async function setWbSellerToken(clientId, token) {
+  if (!clientId) throw new Error('Client ID is required');
+  return apiRequest(`/wildberries/clients/${encodeURIComponent(clientId)}/seller-token`, {
+    method: 'PUT',
+    body: JSON.stringify({ token }),
+  });
+}
+
 /**
- * Синхронизировать справочник логистики
+ * Синхронизировать справочник ПВЗ / складов WB через официальный Seller API.
  */
-export async function syncLogisticsDirectory(marketplace = 'wildberries') {
-  try {
-    const response = await base44.integrations.Core.InvokeLLM({
-      prompt: `Get current marketplace logistics tariffs and directions for ${marketplace}. Return JSON with array of directions.
-      
-Each direction object should have:
-- direction_id (string): unique identifier
-- direction_name (string): region name
-- tariffs: { FBO: { base, per_kg, storage }, FBS: { base, per_kg, storage } }
-
-Return ONLY valid JSON object with 'directions' array, no other text.`,
-      response_json_schema: {
-        type: 'object',
-        properties: {
-          directions: {
-            type: 'array',
-            items: {
-              type: 'object',
-              properties: {
-                direction_id: { type: 'string' },
-                direction_name: { type: 'string' },
-                tariffs: { type: 'object' }
-              }
-            }
-          }
-        }
-      },
-      add_context_from_internet: true,
-      model: 'gemini_3_flash'
-    });
-
-    // Сохраняем в БД
-    for (const dir of response.directions) {
-      try {
-        // Проверяем есть ли уже такое направление
-        const existing = await base44.entities.LogisticsDirectory.filter({
-          source: marketplace,
-          direction_id: dir.direction_id
-        });
-        
-        if (existing.length > 0) {
-          await base44.entities.LogisticsDirectory.update(existing[0].id, {
-            tariffs: dir.tariffs,
-            synced_at: new Date().toISOString()
-          });
-        } else {
-          await base44.entities.LogisticsDirectory.create({
-            source: marketplace,
-            direction_id: dir.direction_id,
-            direction_name: dir.direction_name,
-            tariffs: dir.tariffs,
-            raw_data: dir,
-            synced_at: new Date().toISOString()
-          });
-        }
-      } catch (e) {
-        console.error(`Error saving direction ${dir.direction_id}:`, e);
-      }
-    }
-
-    return response.directions;
-  } catch (error) {
-    console.error('Error syncing logistics directory:', error);
-    throw error;
+export async function syncLogisticsDirectory(marketplace = 'wildberries', options = {}) {
+  if (marketplace !== 'wildberries') {
+    throw new Error(`Unsupported logistics source: ${marketplace}`);
   }
+
+  const clientId = options.clientId;
+  if (!clientId) {
+    throw new Error('Для синхронизации ПВЗ нужен клиент с WB Seller API token');
+  }
+
+  const response = await apiRequest(
+    `/wildberries/clients/${encodeURIComponent(clientId)}/logistics-directions/sync`,
+    { method: 'POST' },
+  );
+
+  return response.directions || [];
 }

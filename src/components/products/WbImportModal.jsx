@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { base44 } from '@/api/base44Client';
+import { fetchWbProductPreview } from '@/lib/MarketplaceAPI';
 import { X, Search, RefreshCw, Package, CheckCircle, AlertCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -24,28 +25,8 @@ export default function WbImportModal({ projects, clients: _clients, onClose }) 
     setError('');
     setPreview(null);
     try {
-      // Получаем данные товара через LLM (симуляция WB API)
-      const result = await base44.integrations.Core.InvokeLLM({
-        prompt: `Получи данные товара Wildberries с артикулом (nmId или vendorCode) "${sku.trim()}".
-Верни реальные данные с сайта WB: название, цена, фото, категория, комиссия, габариты.
-Если товар не найден, верни name: null.`,
-        add_context_from_internet: true,
-        response_json_schema: {
-          type: 'object',
-          properties: {
-            name: { type: 'string' },
-            price: { type: 'number' },
-            sale_price: { type: 'number' },
-            image_url: { type: 'string' },
-            category: { type: 'string' },
-            wb_commission_pct: { type: 'number' },
-            size_length_cm: { type: 'number' },
-            size_width_cm: { type: 'number' },
-            size_height_cm: { type: 'number' },
-            weight_kg: { type: 'number' },
-          }
-        }
-      });
+      const response = await fetchWbProductPreview(sku.trim());
+      const result = response.mapped || {};
       if (!result.name) {
         setError('Товар не найден. Проверьте артикул.');
       } else {

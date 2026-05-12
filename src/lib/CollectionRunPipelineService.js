@@ -1,5 +1,6 @@
 // CollectionRunPipelineService - управляемый pipeline сбора и обработки маркетплейс-данных
 import { base44 } from '@/api/base44Client';
+import { apiRequest } from '@/api/base44Client';
 import { v4 as uuidv4 } from 'uuid';
 
 const STAGES = [
@@ -163,7 +164,7 @@ export class CollectionRunPipelineService {
     try {
       await fn();
       const stageFinished = new Date().toISOString();
-      const durationMs = new Date(stageFinished) - new Date(stageStarted);
+      const durationMs = new Date(stageFinished).getTime() - new Date(stageStarted).getTime();
 
       // Обновляем завершенный этап
       await base44.entities.IngestionRun.update(context.dbRunId, {
@@ -176,7 +177,7 @@ export class CollectionRunPipelineService {
       });
     } catch (error) {
       const stageFinished = new Date().toISOString();
-      const durationMs = new Date(stageFinished) - new Date(stageStarted);
+      const durationMs = new Date(stageFinished).getTime() - new Date(stageStarted).getTime();
 
       await base44.entities.IngestionRun.update(context.dbRunId, {
         timeline: timeline.map((t, i) =>
@@ -265,9 +266,57 @@ export class CollectionRunPipelineService {
   }
 
   static async _collectFromWildberries(mode, productIds, sellerIds) {
-    // TODO: интегрировать реальный API Wildberries
-    console.warn('Real Wildberries collection not implemented yet, using mock');
-    return this._generateMockRawFrames(mode, productIds, sellerIds);
+    const frames = [];
+    const receivedAt = new Date().toISOString();
+
+    if (mode === 'product' || mode === 'full') {
+      const ids = productIds.length > 0 ? productIds : ['1234567'];
+      for (const id of ids) {
+        const response = await apiRequest(`/wildberries/products/${encodeURIComponent(id)}/preview`);
+        const payload = {
+          ...(response.product || {}),
+          seller: response.seller,
+          mapped: response.mapped,
+          endpoints: response.endpoints,
+          errors: response.errors,
+          partial: response.partial,
+          fetchedAt: response.fetchedAt,
+        };
+        frames.push({
+          source: 'wildberries',
+          stream: 'product',
+          sourceEventId: id,
+          payload,
+          payloadHash: this._hashPayload(payload),
+          emittedAt: response.fetchedAt ? new Date(response.fetchedAt).toISOString() : receivedAt,
+          receivedAt,
+          traceId: `wb-${id}-${Date.now()}`,
+          processingStatus: 'received'
+        });
+      }
+    }
+
+    if (mode === 'seller' || mode === 'full') {
+      const ids = sellerIds.length > 0 ? sellerIds : [];
+      ids.forEach(id => {
+        frames.push({
+          source: 'wildberries',
+          stream: 'seller',
+          sourceEventId: id,
+          payload: {
+            id,
+            note: 'Seller-only public collection is not available in this Base44 port yet.'
+          },
+          payloadHash: this._hashPayload({ id }),
+          emittedAt: receivedAt,
+          receivedAt,
+          traceId: `wb-seller-${id}-${Date.now()}`,
+          processingStatus: 'received'
+        });
+      });
+    }
+
+    return frames;
   }
 
   static async normalizeEvents(context) {

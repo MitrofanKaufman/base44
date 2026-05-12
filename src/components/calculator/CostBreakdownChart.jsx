@@ -2,47 +2,9 @@ import { useMemo } from 'react';
 import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer } from 'recharts';
 import { PieChart as PieIcon } from 'lucide-react';
 import { calculate, formatRub, formatPct } from '@/lib/unitEconomics';
+import { buildCalculatorViewModel } from '@/lib/calculatorViewModel';
 
-const SLICES = [
-  { key: 'cogs_purchase',    label: 'Закупка',      color: '#9a3412' },
-  { key: 'cogs_packaging',   label: 'Упаковка',     color: '#c2410c' },
-  { key: 'cogs_fulfillment', label: 'Сборка',       color: '#ea580c' },
-  { key: 'logistics',        label: 'Логистика WB', color: '#3b82f6' },
-  { key: 'commission',       label: 'Комиссия WB',  color: '#8b5cf6' },
-  { key: 'tax',              label: 'Налог',        color: '#10b981' },
-  { key: 'marketing',        label: 'Реклама',      color: '#f59e0b' },
-  { key: 'acquiring',        label: 'Эквайринг',    color: '#6366f1' },
-  { key: 'return',           label: 'Возвраты',     color: '#ec4899' },
-];
-
-function buildSlices(form, result) {
-  const isFBS = form.fulfillment_mode === 'FBS';
-  const logisticsVal = isFBS
-    ? (form.fbs_last_mile || 0) + (form.fbs_ops || 0) + (form.fbs_storage || 0) + (form.fbs_other || 0)
-    : (form.fbo_wb_logistics || 0) + (form.fbo_storage || 0) + (form.fbo_other || 0);
-
-  const raw = {
-    cogs_purchase:    form.cogs_purchase    || 0,
-    cogs_packaging:   form.cogs_packaging   || 0,
-    cogs_fulfillment: form.cogs_fulfillment || 0,
-    logistics:        logisticsVal + (form.cogs_inbound_to_wb || 0),
-    commission:       result.priceNet * (form.wb_commission_pct || 0) / 100,
-    tax:              result.priceNet * (form.tax_pct || 0) / 100,
-    marketing:        result.marketingCost  || 0,
-    acquiring:        result.priceNet * (form.acquiring_pct || 0) / 100,
-    return:           form.return_loss      || 0,
-  };
-
-  const total = Object.values(raw).reduce((s, v) => s + Math.max(0, v), 0);
-  if (total === 0) return [];
-
-  return SLICES
-    .map(s => ({ ...s, value: Math.max(0, raw[s.key]), pct: total > 0 ? (Math.max(0, raw[s.key]) / total) * 100 : 0 }))
-    .filter(s => s.value > 0)
-    .sort((a, b) => b.value - a.value);
-}
-
-const CustomTooltip = ({ active, payload }) => {
+const CustomTooltip = ({ active = false, payload = [] } = {}) => {
   if (!active || !payload?.length) return null;
   const d = payload[0].payload;
   return (
@@ -68,8 +30,9 @@ const renderCustomLabel = ({ cx, cy, midAngle, innerRadius, outerRadius, pct }) 
 
 export default function CostBreakdownChart({ form }) {
   const result = useMemo(() => calculate(form), [form]);
-  const slices = useMemo(() => buildSlices(form, result), [form, result]);
-  const total  = slices.reduce((s, d) => s + d.value, 0);
+  const view = useMemo(() => buildCalculatorViewModel(form, result), [form, result]);
+  const slices = useMemo(() => [...view.costBreakdown.slices].sort((a, b) => b.value - a.value), [view]);
+  const total  = view.costBreakdown.total;
 
   return (
     <div className="bg-card rounded-lg border border-border shadow-warm-sm p-4">
@@ -126,7 +89,7 @@ export default function CostBreakdownChart({ form }) {
               <span className="text-[11px] font-semibold text-foreground flex-1">Contribution</span>
               <span className={`text-[11px] font-mono font-bold ${result.contribution >= 0 ? 'text-success' : 'text-destructive'}`}>{formatRub(result.contribution)}</span>
               <span className={`text-[10px] font-semibold w-9 text-right ${result.contribution >= 0 ? 'text-success' : 'text-destructive'}`}>
-                {result.priceNet > 0 ? formatPct(result.contribution / result.priceNet * 100) : '—'}
+                {result.priceNet > 0 ? formatPct(result.contributionPct, 'ratio') : '—'}
               </span>
             </div>
           </div>

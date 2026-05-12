@@ -7,7 +7,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 
-const Field = ({ label, hint, children }) => (
+const Field = ({ label, hint = '', children }) => (
   <div className="space-y-1.5">
     <Label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">{label}</Label>
     {hint && <p className="text-xs text-muted-foreground -mt-0.5">{hint}</p>}
@@ -29,7 +29,7 @@ export default function ProjectModal({ project, clients, onClose }) {
   });
 
   const mut = useMutation({
-    mutationFn: (data) => isEdit
+    mutationFn: (/** @type {any} */ data) => isEdit
       ? base44.entities.Project.update(project.id, data)
       : base44.entities.Project.create(data),
     onSuccess: () => { qc.invalidateQueries({ queryKey: ['projects'] }); onClose(); },

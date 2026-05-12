@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect } from 'react';
+import { useState, useCallback, useEffect, useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { base44 } from '@/api/base44Client';
 import { calculate } from '@/lib/unitEconomics';
@@ -58,6 +58,10 @@ export default function Calculator() {
 
   const { data: products = [] } = useQuery({ queryKey: ['products'], queryFn: () => base44.entities.Product.list() });
   const { data: projects = [] } = useQuery({ queryKey: ['projects'], queryFn: () => base44.entities.Project.list() });
+  const { data: logisticsDirectories = [] } = useQuery({
+    queryKey: ['logistics-directories'],
+    queryFn: () => base44.entities.LogisticsDirectory.list('-synced_at', 1000),
+  });
 
   const urlProductId = new URLSearchParams(window.location.search).get('product_id');
   useEffect(() => {
@@ -77,6 +81,16 @@ export default function Calculator() {
 
   const result = calculate(form);
   const versionsWithResult = versions.map(v => ({ ...v, result: calculate(v.form) }));
+  const directoriesMap = useMemo(() => {
+    const bySource = {};
+    logisticsDirectories.forEach(dir => {
+      if (!bySource[dir.source]) bySource[dir.source] = [];
+      bySource[dir.source].push(dir);
+    });
+    return bySource;
+  }, [logisticsDirectories]);
+  const selectedClientId = selectedProduct?.client_id
+    || projects.find(p => p.id === selectedProduct?.project_id)?.client_id;
 
   const handleSelectProduct = (product) => {
     if (!product) { setSelectedProduct(null); setForm(DEFAULT_FORM); return; }
@@ -155,8 +169,8 @@ export default function Calculator() {
               productId={selectedProduct.id}
               selectedProduct={selectedProduct}
               onDataUpdate={(data) => {
-                if (data.price) setField('price', data.price);
-                if (data.wb_commission_pct) setField('wb_commission_pct', data.wb_commission_pct);
+                if (data.price !== undefined && data.price !== null) setField('price', data.price);
+                if (data.wb_commission_pct !== undefined && data.wb_commission_pct !== null) setField('wb_commission_pct', data.wb_commission_pct);
               }}
             />
           )}
@@ -188,15 +202,19 @@ export default function Calculator() {
           form={form} 
           setField={setField}
           selectedProduct={selectedProduct}
+          selectedClientId={selectedClientId}
+          directoriesMap={directoriesMap}
         />
       </div>
 
-      {/* ── Ряд 3: Финансы (широко) | Структура затрат | Маржинальность | Юнит-экономика ── */}
-      <div className="grid grid-cols-1 lg:grid-cols-[1fr_280px_280px_280px] gap-3 items-start" style={{ marginBottom: '12px' }}>
+      {/* ── Ряд 3: Финансы и виджеты юнит-экономики ── */}
+      <div className="grid grid-cols-1 gap-3 items-start" style={{ marginBottom: '12px' }}>
         <FinancialSummary result={result} form={form} />
+        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3 items-start">
         <CostBreakdownChart form={form} />
         <ProfitStructureChart form={form} />
         <UnitEconomicsPanel form={form} result={result} />
+        </div>
       </div>
 
       {/* ── Ряд 3.5: Интерактивный график влияния ── */}

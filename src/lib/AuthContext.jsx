@@ -3,7 +3,7 @@ import { base44 } from '@/api/base44Client';
 import { BackgroundSyncService } from '@/lib/BackgroundSyncService';
 import { initializeSubscriptions } from '@/lib/initSubscriptions';
 
-const AuthContext = createContext();
+const AuthContext = createContext(null);
 
 function isAdminUser(user) {
   return ['admin', 'administrator', 'owner'].includes(user?.role);

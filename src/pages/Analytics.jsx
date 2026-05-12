@@ -54,7 +54,7 @@ const processAnalyticsData = (runs) => {
   });
 
   // Преобразуем в массив для графиков
-  const data = Object.values(dailyStats).sort((a, b) => new Date(a.date) - new Date(b.date));
+  const data = Object.values(dailyStats).sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
 
   return data.map(day => ({
     date: day.date,
@@ -290,12 +290,16 @@ export default function Analytics() {
                   sortBy={sortBy}
                   sortOrder={sortOrder}
                   onSort={handleSort}
+                  onFilter={() => {}}
                 />
                 <tbody>
                   {paginatedRuns.map(run => (
                     <RunsTableRow
                       key={run.id}
                       run={run}
+                      onStart={() => {}}
+                      onCancel={() => {}}
+                      onRetry={() => {}}
                       onDelete={() => handleDelete(run)}
                     />
                   ))}

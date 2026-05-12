@@ -1,4 +1,5 @@
 import { formatRub, formatPct } from '@/lib/unitEconomics';
+import { buildBepView } from '@/lib/calculatorViewModel';
 import { TrendingUp, TrendingDown, ShoppingCart, BarChart2, DollarSign, Activity } from 'lucide-react';
 
 const Metric = ({ label, value, icon: Icon, color = 'text-foreground', bg = 'bg-secondary/40' }) => (
@@ -14,6 +15,7 @@ const Metric = ({ label, value, icon: Icon, color = 'text-foreground', bg = 'bg-
 );
 
 export default function MetricsPanel({ result }) {
+  const bep = buildBepView(result);
   const rows = [
     {
       label: 'Чистая выручка',
@@ -38,7 +40,7 @@ export default function MetricsPanel({ result }) {
     },
     {
       label: 'Маржа',
-      value: formatPct(result.grossMarginPct),
+      value: formatPct(result.grossMarginPct, 'ratio'),
       icon: BarChart2,
       color: result.grossMarginPct >= 0 ? 'text-success' : 'text-destructive',
       bg: 'bg-secondary/40',
@@ -60,14 +62,12 @@ export default function MetricsPanel({ result }) {
       </div>
 
       {/* BEP */}
-      {result.bepUnits != null && (
-        <div className="mt-3 bg-accent rounded-md p-3 border border-border">
-          <p className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground mb-1">BEP / Точка безубыточности</p>
-          <p className={`text-lg font-bold ${result.isProfitable ? 'text-foreground' : 'text-destructive'}`}>
-            {result.isProfitable ? `${Math.ceil(result.bepUnits)} шт/мес` : '∞'}
-          </p>
-        </div>
-      )}
+      <div className="mt-3 bg-accent rounded-md p-3 border border-border">
+        <p className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground mb-1">BEP / Точка безубыточности</p>
+        <p className={`text-lg font-bold ${bep.isReachable ? 'text-foreground' : 'text-destructive'}`}>
+          {bep.isReachable ? `${bep.display}/мес` : '∞'}
+        </p>
+      </div>
     </div>
   );
 }

@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ReferenceLine, ResponsiveContainer, Legend } from 'recharts';
 import { calculate, formatRub } from '@/lib/unitEconomics';
+import { getLogisticsSensitivityField } from '@/lib/calculatorViewModel';
 import { TrendingUp } from 'lucide-react';
 
 const MODES = [
@@ -12,8 +13,18 @@ const MODES = [
 
 const STEPS = 20;
 
-function buildData(form, modeKey) {
+function resolveMode(form, modeKey) {
   const mode = MODES.find(m => m.key === modeKey);
+  if (modeKey !== 'logistics') return mode;
+  return {
+    ...mode,
+    field: getLogisticsSensitivityField(form),
+    label: form.fulfillment_mode === 'FBS' ? 'Логистика FBS' : 'Логистика WB',
+  };
+}
+
+function buildData(form, modeKey) {
+  const mode = resolveMode(form, modeKey);
   const base = form[mode.field] || 0;
 
   // If base is 0, use a sensible default range
@@ -35,7 +46,7 @@ function buildData(form, modeKey) {
   });
 }
 
-const CustomTooltip = ({ active, payload, label, unit }) => {
+const CustomTooltip = ({ active = false, payload = [], label = '', unit = '' } = {}) => {
   if (!active || !payload?.length) return null;
   return (
     <div className="bg-card border border-border rounded-lg p-3 shadow-warm text-xs space-y-1.5">
@@ -57,7 +68,7 @@ export default function SensitivityChart({ form }) {
   const [activeMode, setActiveMode] = useState('price');
 
   const data = useMemo(() => buildData(form, activeMode), [form, activeMode]);
-  const mode = MODES.find(m => m.key === activeMode);
+  const mode = resolveMode(form, activeMode);
   const currentX = Math.round((form[mode.field] || 0) * 10) / 10;
 
   return (

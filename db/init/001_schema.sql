@@ -239,6 +239,44 @@ CREATE TABLE IF NOT EXISTS logistics_directories (
   created_by TEXT
 );
 
+CREATE TABLE IF NOT EXISTS wb_jobs (
+  id TEXT PRIMARY KEY,
+  status TEXT NOT NULL CHECK (status IN ('queued', 'running', 'done', 'failed', 'canceled')),
+  article TEXT NOT NULL,
+  product_id TEXT,
+  project_id TEXT,
+  client_id TEXT,
+  user_email TEXT,
+  payload JSONB NOT NULL DEFAULT '{}'::jsonb,
+  result JSONB,
+  progress NUMERIC DEFAULT 0,
+  attempts NUMERIC DEFAULT 0,
+  error TEXT,
+  error_stage TEXT,
+  error_endpoint TEXT,
+  error_code TEXT,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  started_at TIMESTAMPTZ,
+  finished_at TIMESTAMPTZ
+);
+
+CREATE INDEX IF NOT EXISTS idx_wb_jobs_status_updated ON wb_jobs(status, updated_at DESC);
+CREATE INDEX IF NOT EXISTS idx_wb_jobs_article_updated ON wb_jobs(article, updated_at DESC);
+CREATE INDEX IF NOT EXISTS idx_wb_jobs_user_updated ON wb_jobs(user_email, updated_at DESC);
+
+CREATE TABLE IF NOT EXISTS wb_raw (
+  id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
+  article TEXT NOT NULL,
+  fetched_at TIMESTAMPTZ NOT NULL,
+  data JSONB NOT NULL,
+  user_email TEXT,
+  created_date TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS idx_wb_raw_article_fetched ON wb_raw(article, fetched_at DESC);
+CREATE INDEX IF NOT EXISTS idx_wb_raw_user_fetched ON wb_raw(user_email, fetched_at DESC);
+
 CREATE TABLE IF NOT EXISTS price_history (
   id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
   product_id TEXT NOT NULL,

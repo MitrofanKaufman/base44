@@ -1,4 +1,4 @@
-import { formatRub, formatPct } from '@/lib/unitEconomics';
+import { formatRub, formatPct, ratioToPercent } from '@/lib/unitEconomics';
 
 function DonutGauge({ pct, size = 130 }) {
   const display = Math.max(-100, Math.min(100, pct));
@@ -41,12 +41,13 @@ function DonutGauge({ pct, size = 130 }) {
 
 export default function ContribGauge({ result, compact = false }) {
   const contribPos = result.contribution >= 0;
+  const contributionPct = ratioToPercent(result.contributionPct ?? 0);
 
   if (compact) {
     // Compact version embedded inside InputsPanel
     return (
       <div className="flex flex-col items-center gap-2 w-[140px]">
-        <DonutGauge pct={result.contributionPct} size={120} />
+        <DonutGauge pct={contributionPct} size={120} />
         <div className="w-full space-y-1">
           <div className="flex justify-between items-center py-1 px-2 bg-secondary/40 rounded-md">
             <span className="text-[10px] text-muted-foreground">На ед.</span>
@@ -71,7 +72,7 @@ export default function ContribGauge({ result, compact = false }) {
     <div className="bg-card rounded-lg border border-border shadow-warm-sm p-4 flex flex-col items-center gap-3">
       <p className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground self-start">Contribution</p>
 
-      <DonutGauge pct={result.contributionPct} size={140} />
+      <DonutGauge pct={contributionPct} size={140} />
 
       <div className="w-full space-y-2">
         <div className="flex items-center justify-between py-2 px-3 rounded-md bg-secondary/40">
@@ -88,7 +89,7 @@ export default function ContribGauge({ result, compact = false }) {
         </div>
         <div className="flex items-center justify-between py-2 px-3 rounded-md bg-secondary/40">
           <span className="text-xs text-muted-foreground">Маржа валовая</span>
-          <span className="text-sm font-semibold">{formatPct(result.grossMarginPct)}</span>
+          <span className="text-sm font-semibold">{formatPct(result.grossMarginPct, 'ratio')}</span>
         </div>
         <div className={`rounded-md px-3 py-2.5 text-center text-xs font-semibold ${
           result.isProfitable

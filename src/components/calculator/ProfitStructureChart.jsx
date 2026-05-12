@@ -1,49 +1,10 @@
 import { useMemo } from 'react';
 import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer } from 'recharts';
 import { formatRub, formatPct, calculate } from '@/lib/unitEconomics';
+import { buildCalculatorViewModel } from '@/lib/calculatorViewModel';
 import { TrendingUp } from 'lucide-react';
 
-const SEGMENTS = [
-  { key: 'cogs',        label: 'Себестоимость',       color: '#ea580c' },
-  { key: 'fees',        label: 'Комиссии и налоги',   color: '#8b5cf6' },
-  { key: 'logistics',   label: 'Логистика',           color: '#3b82f6' },
-  { key: 'marketing',   label: 'Маркетинг',           color: '#f59e0b' },
-  { key: 'profit',      label: 'Чистая прибыль',      color: '#10b981' },
-];
-
-function buildData(form, result) {
-  const isFBS = form.fulfillment_mode === 'FBS';
-  const logisticsVal = isFBS
-    ? (form.fbs_last_mile || 0) + (form.fbs_ops || 0) + (form.fbs_storage || 0) + (form.fbs_other || 0)
-    : (form.fbo_wb_logistics || 0) + (form.fbo_storage || 0) + (form.fbo_other || 0);
-
-  const cogs = (form.cogs_purchase || 0) + (form.cogs_packaging || 0) + (form.cogs_fulfillment || 0) + (form.cogs_inbound_to_wb || 0);
-  const fees = result.priceNet * ((form.wb_commission_pct || 0) + (form.tax_pct || 0) + (form.acquiring_pct || 0)) / 100;
-  const logistics = logisticsVal + (form.return_loss || 0);
-  const marketing = result.marketingCost || 0;
-  const profit = result.contribution;
-
-  const raw = [
-    { key: 'cogs',      value: Math.max(0, cogs) },
-    { key: 'fees',      value: Math.max(0, fees) },
-    { key: 'logistics', value: Math.max(0, logistics) },
-    { key: 'marketing', value: Math.max(0, marketing) },
-    { key: 'profit',    value: Math.max(0, profit) },
-  ];
-
-  const total = raw.reduce((s, d) => s + d.value, 0);
-  if (total === 0) return [];
-
-  return raw
-    .filter(d => d.value > 0)
-    .map(d => ({
-      ...SEGMENTS.find(s => s.key === d.key),
-      value: d.value,
-      pct: (d.value / total) * 100,
-    }));
-}
-
-const CustomTooltip = ({ active, payload }) => {
+const CustomTooltip = ({ active = false, payload = [] } = {}) => {
   if (!active || !payload?.length) return null;
   const d = payload[0].payload;
   return (
@@ -69,7 +30,8 @@ const renderLabel = ({ cx, cy, midAngle, innerRadius, outerRadius, pct }) => {
 
 export default function ProfitStructureChart({ form }) {
   const result = useMemo(() => calculate(form), [form]);
-  const data   = useMemo(() => buildData(form, result), [form, result]);
+  const view = useMemo(() => buildCalculatorViewModel(form, result), [form, result]);
+  const data = view.profitStructure.slices;
   const profitable = result.contribution >= 0;
 
   return (
@@ -111,7 +73,7 @@ export default function ProfitStructureChart({ form }) {
             </ResponsiveContainer>
             <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
               <p className={`text-[15px] font-bold leading-none ${profitable ? 'text-success' : 'text-destructive'}`}>
-                {formatPct(Math.abs(result.grossMarginPct))}
+                {formatPct(result.grossMarginPct, 'ratio')}
               </p>
               <p className="text-[9px] text-muted-foreground mt-0.5">маржа</p>
             </div>

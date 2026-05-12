@@ -1,4 +1,5 @@
-import { formatRub, formatPct } from '@/lib/unitEconomics';
+import { formatRub, formatPct, ratioToPercent } from '@/lib/unitEconomics';
+import { buildBepView } from '@/lib/calculatorViewModel';
 import { CheckCircle, XCircle } from 'lucide-react';
 
 function DonutGauge({ pct, size = 160 }) {
@@ -49,11 +50,13 @@ const KpiRow = ({ label, value, color }) => (
 
 export default function MarginGaugePanel({ result }) {
   const pos = result.contribution >= 0;
-  const contributionPct = result.priceNet > 0 ? (result.contribution / result.priceNet) * 100 : 0;
+  const grossMarginPct = ratioToPercent(result.grossMarginPct ?? 0);
+  const contributionPct = result.contributionPct ?? 0;
+  const bep = buildBepView(result);
 
   return (
     <div className="bg-card rounded-lg border border-border shadow-warm-sm p-4 flex flex-col items-center gap-4 h-full">
-      <DonutGauge pct={result.grossMarginPct} size={164} />
+      <DonutGauge pct={grossMarginPct} size={164} />
 
       {/* Verdict badge */}
       <div className={`flex items-center gap-1.5 px-4 py-1.5 rounded-full text-xs font-bold border ${
@@ -67,12 +70,12 @@ export default function MarginGaugePanel({ result }) {
       <div className="w-full mt-1">
         <KpiRow label="Валовая прибыль"      value={formatRub(result.grossProfit)}    color={result.grossProfit >= 0 ? 'text-success' : 'text-destructive'} />
         <KpiRow label="Contribution margin"   value={formatRub(result.contribution)}   color={pos ? 'text-success' : 'text-destructive'} />
-        <KpiRow label="Маржинальность"        value={formatPct(result.grossMarginPct)} />
-        <KpiRow label="Contribution %"        value={formatPct(contributionPct)}       color={pos ? 'text-success' : 'text-destructive'} />
+        <KpiRow label="Маржинальность"        value={formatPct(result.grossMarginPct, 'ratio')} />
+        <KpiRow label="Contribution %"        value={formatPct(contributionPct, 'ratio')}       color={pos ? 'text-success' : 'text-destructive'} />
         <KpiRow label="Операционная прибыль" value={formatRub(result.contribution)}   color={pos ? 'text-success' : 'text-destructive'} />
-        <KpiRow label="Рентабельность"        value={formatPct(contributionPct)}       color={pos ? 'text-success' : 'text-destructive'} />
-        {result.bepUnits && (
-          <KpiRow label="BEP (шт/мес)"       value={`${Math.ceil(result.bepUnits)} шт`} />
+        <KpiRow label="Рентабельность"        value={formatPct(contributionPct, 'ratio')}       color={pos ? 'text-success' : 'text-destructive'} />
+        {bep.isReachable && (
+          <KpiRow label="BEP (шт/мес)"       value={bep.display} />
         )}
       </div>
     </div>

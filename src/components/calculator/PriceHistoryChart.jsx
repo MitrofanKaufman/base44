@@ -73,8 +73,17 @@ export default function PriceHistoryChart({ productId, selectedProduct }) {
 
   const minPrice = Math.min(...priceHistory.map(d => d.our_price));
   const maxPrice = Math.max(...priceHistory.map(d => d.our_price));
-  const avgMargin = (priceHistory.reduce((sum, d) => sum + (d.margin_pct || 0), 0) / priceHistory.length).toFixed(1);
-  const priceChange = ((priceHistory[priceHistory.length - 1]?.our_price - priceHistory[0]?.our_price) / priceHistory[0]?.our_price * 100).toFixed(1);
+  const marginValues = priceHistory
+    .map(d => Number(d.margin_pct))
+    .filter(v => Number.isFinite(v));
+  const avgMargin = marginValues.length
+    ? (marginValues.reduce((sum, value) => sum + value, 0) / marginValues.length).toFixed(1)
+    : null;
+  const firstPrice = Number(priceHistory[0]?.our_price);
+  const lastPrice = Number(priceHistory[priceHistory.length - 1]?.our_price);
+  const priceChange = Number.isFinite(firstPrice) && firstPrice > 0 && Number.isFinite(lastPrice)
+    ? ((lastPrice - firstPrice) / firstPrice * 100).toFixed(1)
+    : null;
 
   const chartData = priceHistory.map(d => {
     const item = {
@@ -139,13 +148,13 @@ export default function PriceHistoryChart({ productId, selectedProduct }) {
         </div>
         <div className="bg-secondary/50 rounded p-2 text-center">
           <div className="text-[9px] text-muted-foreground">Изменение</div>
-          <div className={`text-lg font-bold ${priceChange >= 0 ? 'text-destructive' : 'text-success'}`}>
-            {priceChange > 0 ? '+' : ''}{priceChange}%
+          <div className={`text-lg font-bold ${(Number(priceChange) || 0) >= 0 ? 'text-destructive' : 'text-success'}`}>
+            {priceChange != null ? `${Number(priceChange) > 0 ? '+' : ''}${priceChange}%` : '—'}
           </div>
         </div>
         <div className="bg-secondary/50 rounded p-2 text-center">
           <div className="text-[9px] text-muted-foreground">Средняя маржа</div>
-          <div className="text-lg font-bold text-success">{avgMargin}%</div>
+          <div className="text-lg font-bold text-success">{avgMargin != null ? `${avgMargin}%` : '—'}</div>
         </div>
       </div>
 
@@ -179,7 +188,7 @@ export default function PriceHistoryChart({ productId, selectedProduct }) {
                 padding: '8px'
               }}
               labelStyle={{ color: 'hsl(var(--foreground))' }}
-              formatter={(value) => value?.toFixed(0)}
+              formatter={(value) => Number(value).toFixed(0)}
               cursor={{ stroke: 'hsl(var(--muted-foreground))' }}
             />
             <Area 
@@ -238,7 +247,7 @@ export default function PriceHistoryChart({ productId, selectedProduct }) {
                   borderRadius: '8px',
                   padding: '8px'
                 }}
-                formatter={(value) => value?.toFixed(1)}
+                formatter={(value) => Number(value).toFixed(1)}
                 cursor={{ stroke: 'hsl(var(--muted-foreground))' }}
               />
               <Line 

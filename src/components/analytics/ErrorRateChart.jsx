@@ -29,7 +29,7 @@ export default function ErrorRateChart({ data }) {
             <XAxis dataKey="date" />
             <YAxis domain={[0, 100]} label={{ value: '%', angle: -90, position: 'insideLeft' }} />
             <Tooltip 
-              formatter={(value) => `${value.toFixed(2)}%`}
+              formatter={(value) => `${Number(value).toFixed(2)}%`}
               labelFormatter={(label) => `Дата: ${label}`}
             />
             <Legend />

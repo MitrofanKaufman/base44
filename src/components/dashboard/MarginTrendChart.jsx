@@ -23,7 +23,7 @@ export default function MarginTrendChart() {
     });
 
   const chartData = Object.entries(grouped)
-    .sort(([a], [b]) => new Date(a) - new Date(b))
+    .sort(([a], [b]) => new Date(a).getTime() - new Date(b).getTime())
     .map(([date, items]) => ({
       date,
       avgMargin: items.reduce((s, i) => s + (i.margin_pct || 0), 0) / items.length || 0,
@@ -63,7 +63,7 @@ export default function MarginTrendChart() {
               fontSize: 12,
               boxShadow: '0 8px 24px rgba(61,38,20,.10)',
             }}
-            formatter={(value) => `${value.toFixed(1)}%`}
+            formatter={(value) => `${Number(value).toFixed(1)}%`}
             labelFormatter={(label) => `Дата: ${label}`}
           />
           <Legend />
