@@ -1,7 +1,8 @@
-import { useState, useCallback, useEffect, useMemo } from 'react';
+import { useState, useCallback, useEffect, useMemo, useRef } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { base44 } from '@/api/base44Client';
 import { calculate } from '@/lib/unitEconomics';
+import { buildCalculatorSeed } from '@/lib/calculatorSeed';
 import { Package } from 'lucide-react';
 import ProductHeader from '@/components/calculator/ProductHeader.jsx';
 import DimensionsBox from '@/components/calculator/DimensionsBox';
@@ -55,12 +56,33 @@ export default function Calculator() {
   const [versions,  setVersions]  = useState([makeVersion()]);
   const [activeIdx, setActiveIdx] = useState(0);
   const [selectedProduct, setSelectedProduct] = useState(null);
+  const lastSeedSignature = useRef('');
 
   const { data: products = [] } = useQuery({ queryKey: ['products'], queryFn: () => base44.entities.Product.list() });
   const { data: projects = [] } = useQuery({ queryKey: ['projects'], queryFn: () => base44.entities.Project.list() });
   const { data: logisticsDirectories = [] } = useQuery({
     queryKey: ['logistics-directories'],
     queryFn: () => base44.entities.LogisticsDirectory.list('-synced_at', 1000),
+  });
+  const { data: commissionDirectories = [] } = useQuery({
+    queryKey: ['commission-directories'],
+    queryFn: () => base44.entities.MarketplaceCommissionDirectory.list('-synced_at', 1000),
+  });
+  const selectedProductId = selectedProduct?.id;
+  const { data: productSnapshots = [] } = useQuery({
+    queryKey: ['product-snapshots', selectedProductId],
+    queryFn: () => base44.entities.ProductSnapshot.filter({ productId: selectedProductId }, '-updatedAt', 20),
+    enabled: Boolean(selectedProductId),
+  });
+  const { data: unitEconomicsSnapshots = [] } = useQuery({
+    queryKey: ['unit-economics-snapshots', selectedProductId],
+    queryFn: () => base44.entities.UnitEconomicsSnapshot.filter({ itemId: selectedProductId }, '-updatedAt', 20),
+    enabled: Boolean(selectedProductId),
+  });
+  const { data: priceHistory = [] } = useQuery({
+    queryKey: ['price-history', selectedProductId],
+    queryFn: () => base44.entities.PriceHistory.filter({ product_id: selectedProductId }, '-date', 20),
+    enabled: Boolean(selectedProductId),
   });
 
   const urlProductId = new URLSearchParams(window.location.search).get('product_id');
@@ -91,26 +113,65 @@ export default function Calculator() {
   }, [logisticsDirectories]);
   const selectedClientId = selectedProduct?.client_id
     || projects.find(p => p.id === selectedProduct?.project_id)?.client_id;
+  const selectedProject = projects.find(p => p.id === selectedProduct?.project_id);
+
+  const buildSeedForProduct = useCallback((product) => buildCalculatorSeed({
+    defaultForm: DEFAULT_FORM,
+    product,
+    project: projects.find(p => p.id === product?.project_id),
+    productSnapshots: product?.id === selectedProductId ? productSnapshots : [],
+    unitEconomicsSnapshots: product?.id === selectedProductId ? unitEconomicsSnapshots : [],
+    priceHistory: product?.id === selectedProductId ? priceHistory : [],
+    commissionDirectories,
+    logisticsDirectoriesMap: directoriesMap,
+  }), [
+    projects,
+    productSnapshots,
+    unitEconomicsSnapshots,
+    priceHistory,
+    commissionDirectories,
+    directoriesMap,
+    selectedProductId,
+  ]);
 
   const handleSelectProduct = (product) => {
     if (!product) { setSelectedProduct(null); setForm(DEFAULT_FORM); return; }
-    const proj = projects.find(p => p.id === product.project_id);
     setSelectedProduct(product);
-    setForm(() => ({
-      ...DEFAULT_FORM,
-      price:             product.sale_price || product.price || 0,
-      wb_commission_pct: product.wb_commission_pct || 15,
-      fulfillment_mode:  product.fulfillment_mode || 'FBO',
-      fixed_monthly:     proj?.fixed_monthly || 0,
-      size_length_cm:    product.size_length_cm,
-      size_width_cm:     product.size_width_cm,
-      size_height_cm:    product.size_height_cm,
-      weight_kg:         product.weight_kg,
-    }));
+    lastSeedSignature.current = '';
+    setForm(() => buildSeedForProduct(product));
     setVersions(vs => vs.map((v, i) =>
       i === activeIdx ? { ...v, name: product.name.slice(0, 20) } : v
     ));
   };
+
+  const seedSignature = useMemo(() => {
+    if (!selectedProduct) return '';
+    const latestStamp = (items) => items[0]?.updatedAt || items[0]?.updated_at || items[0]?.date || items[0]?.created_date || '';
+    return [
+      selectedProduct.id,
+      selectedProduct.updated_date,
+      selectedProject?.updated_date,
+      latestStamp(productSnapshots),
+      latestStamp(unitEconomicsSnapshots),
+      latestStamp(priceHistory),
+      latestStamp(commissionDirectories),
+      latestStamp(logisticsDirectories),
+    ].join('|');
+  }, [
+    selectedProduct,
+    selectedProject,
+    productSnapshots,
+    unitEconomicsSnapshots,
+    priceHistory,
+    commissionDirectories,
+    logisticsDirectories,
+  ]);
+
+  useEffect(() => {
+    if (!selectedProduct || !seedSignature || lastSeedSignature.current === seedSignature) return;
+    lastSeedSignature.current = seedSignature;
+    setForm(() => buildSeedForProduct(selectedProduct));
+  }, [selectedProduct, seedSignature, buildSeedForProduct, setForm]);
 
   const addVersion = () => {
     const newIdx = versions.length;

@@ -4,6 +4,10 @@ dist
 mcp-profile-copy
 .git
 .gitignore
+.env
+.env.*
+!.env*.example
+!backend/.env*.example
 *.log
 *.tmp
 base44-files.json

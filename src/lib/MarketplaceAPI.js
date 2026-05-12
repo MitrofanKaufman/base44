@@ -17,7 +17,7 @@ export async function fetchProductDataFromMarketplace(productId, marketplace = '
     ...mapped,
     current_price: mapped.current_price ?? mapped.sale_price ?? mapped.price ?? 0,
     stock: mapped.stock ?? response.product?.stock ?? 0,
-    commission_pct: mapped.commission_pct ?? 0,
+    commission_pct: mapped.commission_pct,
     minimal_price: mapped.minimal_price ?? mapped.current_price ?? mapped.sale_price ?? mapped.price ?? 0,
     collection: response,
     persistence: response.persistence,
@@ -123,4 +123,15 @@ export async function syncLogisticsDirectory(marketplace = 'wildberries', option
   );
 
   return response.directions || [];
+}
+
+export async function syncWbCommissionDirectory(clientId) {
+  if (!clientId) {
+    throw new Error('Для синхронизации комиссий нужен клиент с WB Seller API token');
+  }
+  const response = await apiRequest(
+    `/wildberries/clients/${encodeURIComponent(clientId)}/commission-directory/sync`,
+    { method: 'POST' },
+  );
+  return response.items || [];
 }

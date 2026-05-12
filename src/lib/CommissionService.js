@@ -49,6 +49,43 @@ export function getCommissionByProduct(product, source = 'wildberries') {
   return sourceCommissions.default;
 }
 
+const normalizeName = (value) => String(value || '').trim().toLowerCase();
+
+const modelFieldForMode = (fulfillmentMode = 'FBO') => (
+  fulfillmentMode === 'FBS' ? 'kgvpSupplier' : 'kgvpMarketplace'
+);
+
+const finitePositive = (value) => {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : undefined;
+};
+
+export function getCommissionFromDirectory(product, fulfillmentMode = 'FBO', directories = []) {
+  if (!product) return undefined;
+  const categoryName = normalizeName(product.category || product.category_name);
+  const categoryId = normalizeName(product.category_id || product.subject_id);
+  if (!categoryName && !categoryId) return undefined;
+
+  const row = directories.find((item) => {
+    if (item.source && item.source !== 'wildberries') return false;
+    const itemCategoryId = normalizeName(item.category_id);
+    const itemCategoryName = normalizeName(item.category_name);
+    return (categoryId && itemCategoryId === categoryId) || (categoryName && itemCategoryName === categoryName);
+  });
+  if (!row) return undefined;
+
+  const modelField = modelFieldForMode(fulfillmentMode);
+  return finitePositive(row.commission_by_model?.[modelField])
+    ?? finitePositive(row.commission_pct);
+}
+
+export function resolveWbCommission(product, fulfillmentMode = 'FBO', directories = []) {
+  return getCommissionFromDirectory(product, fulfillmentMode, directories)
+    ?? finitePositive(product?.wb_commission_pct)
+    ?? getCommissionByProduct(product, 'wildberries')
+    ?? 15;
+}
+
 export function getAllCommissions(source = 'wildberries') {
   return DEFAULT_COMMISSIONS[source] || DEFAULT_COMMISSIONS.wildberries;
 }

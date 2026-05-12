@@ -1,10 +1,11 @@
 import { useState } from 'react';
-import { useMutation } from '@tanstack/react-query';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { RefreshCw, AlertCircle, CheckCircle, Loader } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { fetchProductDataFromMarketplace } from '@/lib/MarketplaceAPI';
 
 export default function MarketplaceDataSync({ productId, selectedProduct, onDataUpdate }) {
+  const qc = useQueryClient();
   const [status, setStatus] = useState(null);
   const [error, setError] = useState(null);
 
@@ -18,12 +19,21 @@ export default function MarketplaceDataSync({ productId, selectedProduct, onData
     onSuccess: (data) => {
       setStatus('success');
       setError(null);
+      [
+        ['products'],
+        ['product-snapshots', productId],
+        ['unit-economics-snapshots', productId],
+        ['price-history', productId],
+        ['commission-directories'],
+        ['logistics-directories'],
+      ].forEach((queryKey) => qc.invalidateQueries({ queryKey }));
       
       if (onDataUpdate) {
-        onDataUpdate({
-          price: data.current_price,
-          wb_commission_pct: data.commission_pct
-        });
+        const patch = { price: data.current_price };
+        if (data.commission_pct !== undefined && data.commission_pct !== null) {
+          patch.wb_commission_pct = data.commission_pct;
+        }
+        onDataUpdate(patch);
       }
       
       setTimeout(() => setStatus(null), 3000);

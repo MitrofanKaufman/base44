@@ -3,8 +3,10 @@ import { clearAuthCookie, requireAuth, requireRole, setAuthCookie, signAccessTok
 
 const roleOverrideAllowed = (process.env.ALLOW_ROLE_OVERRIDE || 'false') === 'true';
 
-export function registerAuthRoutes(app, pool) {
-  app.post('/auth/register', async (req, res) => {
+const withLimiter = (limiter) => (limiter ? [limiter] : []);
+
+export function registerAuthRoutes(app, pool, options = {}) {
+  app.post('/auth/register', ...withLimiter(options.authRateLimiter), async (req, res) => {
     const email = String(req.body?.email || '').trim().toLowerCase();
     const fullName = String(req.body?.full_name || '').trim();
     const { password, role } = req.body || {};
@@ -43,7 +45,7 @@ export function registerAuthRoutes(app, pool) {
     return res.status(201).json({ token, user });
   });
 
-  app.post('/auth/login', async (req, res) => {
+  app.post('/auth/login', ...withLimiter(options.authRateLimiter), async (req, res) => {
     const email = String(req.body?.email || '').trim().toLowerCase();
     const { password } = req.body || {};
     if (!email || !password) {

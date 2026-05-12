@@ -1,0 +1,54 @@
+{
+  "name": "MarketplaceCommissionDirectory",
+  "type": "object",
+  "properties": {
+    "source": {
+      "type": "string",
+      "enum": [
+        "wildberries",
+        "yandex",
+        "ozon"
+      ],
+      "description": "Источник справочника"
+    },
+    "category_id": {
+      "type": "string",
+      "description": "ID категории маркетплейса"
+    },
+    "category_name": {
+      "type": "string",
+      "description": "Название категории маркетплейса"
+    },
+    "parent_category_id": {
+      "type": "string",
+      "description": "ID родительской категории"
+    },
+    "parent_category_name": {
+      "type": "string",
+      "description": "Название родительской категории"
+    },
+    "commission_pct": {
+      "type": "number",
+      "description": "Комиссия по умолчанию (%)"
+    },
+    "commission_by_model": {
+      "type": "object",
+      "description": "Комиссии по моделям работы WB"
+    },
+    "raw_data": {
+      "type": "object",
+      "description": "Полные данные из справочника маркетплейса"
+    },
+    "synced_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "Время последней синхронизации"
+    }
+  },
+  "required": [
+    "source",
+    "category_id",
+    "category_name",
+    "commission_by_model"
+  ]
+}

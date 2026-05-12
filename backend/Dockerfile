@@ -4,10 +4,12 @@ WORKDIR /app
 ENV NODE_ENV=production
 
 COPY package.json package-lock.json* ./
-RUN npm ci --omit=dev
+RUN npm ci --omit=dev \
+  && npm cache clean --force \
+  && rm -rf /usr/local/lib/node_modules/npm /usr/local/bin/npm /usr/local/bin/npx
 
 COPY src ./src
 
 EXPOSE 3000
 
-CMD ["npm", "start"]
+CMD ["node", "src/server.js"]

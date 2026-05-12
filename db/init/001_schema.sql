@@ -239,6 +239,27 @@ CREATE TABLE IF NOT EXISTS logistics_directories (
   created_by TEXT
 );
 
+CREATE TABLE IF NOT EXISTS marketplace_commission_directories (
+  id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
+  source TEXT NOT NULL CHECK (source IN ('wildberries', 'yandex', 'ozon')),
+  category_id TEXT NOT NULL,
+  category_name TEXT NOT NULL,
+  parent_category_id TEXT,
+  parent_category_name TEXT,
+  commission_pct NUMERIC,
+  commission_by_model JSONB NOT NULL DEFAULT '{}'::jsonb,
+  raw_data JSONB,
+  synced_at TIMESTAMPTZ,
+  created_date TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_date TIMESTAMPTZ NOT NULL DEFAULT now(),
+  created_by TEXT
+);
+
+CREATE UNIQUE INDEX IF NOT EXISTS idx_marketplace_commission_owner_category
+  ON marketplace_commission_directories(source, category_id, created_by);
+CREATE INDEX IF NOT EXISTS idx_marketplace_commission_category_name
+  ON marketplace_commission_directories(source, lower(category_name));
+
 CREATE TABLE IF NOT EXISTS wb_jobs (
   id TEXT PRIMARY KEY,
   status TEXT NOT NULL CHECK (status IN ('queued', 'running', 'done', 'failed', 'canceled')),

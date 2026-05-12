@@ -6,7 +6,7 @@ const toSnakeCase = (str) => {
 	return str.replace(/([A-Z])/g, '_$1').toLowerCase();
 }
 
-const getAppParamValue = (paramName, { defaultValue = undefined, removeFromUrl = false } = {}) => {
+const getAppParamValue = (paramName, { defaultValue = undefined, removeFromUrl = false, persist = true } = {}) => {
 	if (isNode) {
 		return defaultValue;
 	}
@@ -20,13 +20,14 @@ const getAppParamValue = (paramName, { defaultValue = undefined, removeFromUrl =
 		window.history.replaceState({}, document.title, newUrl);
 	}
 	if (searchParam) {
-		storage.setItem(storageKey, searchParam);
+		if (persist) storage.setItem(storageKey, searchParam);
 		return searchParam;
 	}
 	if (defaultValue) {
-		storage.setItem(storageKey, defaultValue);
+		if (persist) storage.setItem(storageKey, defaultValue);
 		return defaultValue;
 	}
+	if (!persist) return null;
 	const storedValue = storage.getItem(storageKey);
 	if (storedValue) {
 		return storedValue;
@@ -41,7 +42,7 @@ const getAppParams = () => {
 	}
 	return {
 		appId: getAppParamValue("app_id", { defaultValue: import.meta.env.VITE_BASE44_APP_ID }),
-		token: getAppParamValue("access_token", { removeFromUrl: true }),
+		token: getAppParamValue("access_token", { removeFromUrl: true, persist: false }),
 		fromUrl: getAppParamValue("from_url", { defaultValue: window.location.href }),
 		functionsVersion: getAppParamValue("functions_version", { defaultValue: import.meta.env.VITE_BASE44_FUNCTIONS_VERSION }),
 		appBaseUrl: getAppParamValue("app_base_url", { defaultValue: import.meta.env.VITE_BASE44_APP_BASE_URL }),

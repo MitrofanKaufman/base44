@@ -253,6 +253,68 @@ export function normalizeWbLogisticsDirections(payloads, options = {}) {
   return directions;
 }
 
+const COMMISSION_MODEL_FIELDS = [
+  'kgvpMarketplace',
+  'kgvpSupplier',
+  'kgvpPickup',
+  'kgvpBooking',
+  'kgvpSupplierExpress',
+  'paidStorageKgvp',
+];
+
+const firstFieldValue = (row, ...keys) => {
+  for (const key of keys) {
+    if (row[key] !== undefined && row[key] !== null && row[key] !== '') return row[key];
+  }
+  return undefined;
+};
+
+const commissionModelFromRow = (row) => {
+  const out = {};
+  for (const key of COMMISSION_MODEL_FIELDS) {
+    const value = firstNumber(row[key], row[key[0].toLowerCase() + key.slice(1)]);
+    if (value !== undefined) out[key] = value;
+  }
+  return out;
+};
+
+export function normalizeWbCommissionDirectory(payload, options = {}) {
+  const syncedAt = options.syncedAt || new Date().toISOString();
+  const normalized = normalizeDirectoryPayload(payload);
+  const out = [];
+  const seen = new Set();
+
+  for (const row of normalized.rows) {
+    const categoryName = firstString(
+      firstFieldValue(row, 'subjectName', 'subject_name', 'name', 'categoryName', 'category_name'),
+    );
+    const categoryIdRaw = firstFieldValue(row, 'subjectID', 'subjectId', 'subject_id', 'id', 'categoryId', 'category_id');
+    const categoryId = String(categoryIdRaw ?? '').trim() || slugify(categoryName);
+    const parentCategoryIdRaw = firstFieldValue(row, 'parentID', 'parentId', 'parent_id', 'parentCategoryId');
+    if (!categoryId || !categoryName || seen.has(categoryId)) continue;
+    seen.add(categoryId);
+
+    const commissionByModel = commissionModelFromRow(row);
+    out.push({
+      source: 'wildberries',
+      category_id: categoryId,
+      category_name: categoryName,
+      parent_category_id: String(parentCategoryIdRaw ?? '').trim() || undefined,
+      parent_category_name: firstString(firstFieldValue(row, 'parentName', 'parent_name', 'parentCategoryName')),
+      commission_pct: firstNumber(
+        commissionByModel.kgvpMarketplace,
+        commissionByModel.kgvpSupplier,
+        firstFieldValue(row, 'commission', 'commissionPct', 'commission_pct'),
+      ),
+      commission_by_model: commissionByModel,
+      raw_data: row,
+      synced_at: syncedAt,
+    });
+  }
+
+  return out;
+}
+
 export class WbSellerApi {
   async fetchWithTimeout(url, init, timeoutMs) {
     const ctrl = new AbortController();

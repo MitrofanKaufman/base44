@@ -35,11 +35,6 @@ export function getBillableWeightKg(product = {}) {
  * @returns {object} - {base, per_kg, storage}
  */
 export function getTariffs(direction, mode, directoriesMap = {}) {
-  const cacheKey = `${direction}_${mode}`;
-  if (TARIFF_CACHE[cacheKey]) {
-    return TARIFF_CACHE[cacheKey];
-  }
-
   // Поиск в справочниках WB
   const wbDir = (directoriesMap.wildberries || []).find(
     d => d.direction_id === direction
@@ -52,8 +47,12 @@ export function getTariffs(direction, mode, directoriesMap = {}) {
       storage: wbDir.tariffs[mode].storage,
       source: 'wildberries'
     };
-    TARIFF_CACHE[cacheKey] = tariff;
     return tariff;
+  }
+
+  const cacheKey = `${direction}_${mode}_default`;
+  if (TARIFF_CACHE[cacheKey]) {
+    return TARIFF_CACHE[cacheKey];
   }
 
   // Fallback по умолчанию

@@ -21,10 +21,14 @@ test('docker and auth config do not ship production with default secrets', async
   const auth = await readFile(path.join(root, 'backend', 'src', 'auth.js'), 'utf8');
   const backendDockerfile = await readFile(path.join(root, 'backend', 'Dockerfile'), 'utf8');
   const backendEnvExample = await readFile(path.join(root, 'backend', '.env.example'), 'utf8');
+  const dockerignore = await readFile(path.join(root, '.dockerignore'), 'utf8');
 
   assert.doesNotMatch(compose, /change-me-in-production/);
   assert.doesNotMatch(auth, /change-me-in-production/);
   assert.doesNotMatch(backendEnvExample, /change-me-in-production/);
+  assert.match(dockerignore, /^\.env$/m);
+  assert.match(dockerignore, /^\.env\.\*$/m);
+  assert.match(dockerignore, /^!\.env\*\.example$/m);
   assert.match(prodCompose, /\$\{JWT_SECRET:\?JWT_SECRET is required/);
   assert.match(prodCompose, /\$\{POSTGRES_PASSWORD:\?POSTGRES_PASSWORD is required/);
   assert.match(auth, /NODE_ENV\s*===\s*'production'/);

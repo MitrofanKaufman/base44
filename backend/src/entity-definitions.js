@@ -311,6 +311,27 @@ export const entityDefinitions = {
       created_by: { db: 'created_by', schema: t.string('Email of the user who created the record') }
     }
   },
+  MarketplaceCommissionDirectory: {
+    table: 'marketplace_commission_directories',
+    idField: 'id',
+    required: ['source', 'category_id', 'category_name', 'commission_by_model'],
+    search: ['source', 'category_id', 'category_name', 'parent_category_name'],
+    fields: {
+      source: { db: 'source', schema: t.string('Источник справочника', { enum: ['wildberries', 'yandex', 'ozon'] }) },
+      category_id: { db: 'category_id', schema: t.string('ID категории маркетплейса') },
+      category_name: { db: 'category_name', schema: t.string('Название категории маркетплейса') },
+      parent_category_id: { db: 'parent_category_id', schema: t.string('ID родительской категории') },
+      parent_category_name: { db: 'parent_category_name', schema: t.string('Название родительской категории') },
+      commission_pct: { db: 'commission_pct', schema: t.number('Комиссия по умолчанию (%)') },
+      commission_by_model: { db: 'commission_by_model', schema: t.object('Комиссии по моделям работы WB') },
+      raw_data: { db: 'raw_data', schema: t.object('Полные данные из справочника маркетплейса') },
+      synced_at: { db: 'synced_at', schema: t.string('Время последней синхронизации', { format: 'date-time' }) },
+      id: { db: 'id', schema: t.string('Unique record identifier') },
+      created_date: { db: 'created_date', schema: t.string('Record creation timestamp', { format: 'date-time' }) },
+      updated_date: { db: 'updated_date', schema: t.string('Record last update timestamp', { format: 'date-time' }) },
+      created_by: { db: 'created_by', schema: t.string('Email of the user who created the record') }
+    }
+  },
   PriceHistory: {
     table: 'price_history',
     idField: 'id',

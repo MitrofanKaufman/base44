@@ -6,9 +6,18 @@ const OWNED_REFERENCES = {
   product_id: { table: 'products', idField: 'id' },
 };
 
+const IDENTIFIER_RE = /^[a-z_][a-z0-9_]*$/i;
+
 export const toDbField = (def, apiField) => def.fields[apiField]?.db;
 
 export const isAdminAuth = (auth = {}) => auth?.role === 'admin';
+
+export function assertSqlIdentifier(identifier) {
+  if (!IDENTIFIER_RE.test(String(identifier || ''))) {
+    throw new Error(`Unsafe SQL identifier: ${identifier}`);
+  }
+  return identifier;
+}
 
 export const sanitizeInput = (def, payload = {}) => {
   const out = {};
@@ -27,6 +36,55 @@ function buildAccessClause(def, auth, index) {
     return { clause: 'FALSE', values: [] };
   }
   return { clause: `${createdByField} = $${index}`, values: [auth.email] };
+}
+
+export function buildOwnerAccess(auth = {}, ownerField = 'created_by', index = 1) {
+  assertSqlIdentifier(ownerField);
+  if (isAdminAuth(auth)) {
+    return { clause: '', values: [], nextIndex: index };
+  }
+  if (!auth?.email) {
+    return { clause: 'FALSE', values: [], nextIndex: index };
+  }
+  return {
+    clause: `${ownerField} = $${index}`,
+    values: [auth.email],
+    nextIndex: index + 1,
+  };
+}
+
+export function appendOwnerAccess(whereSql, values = [], auth = {}, ownerField = 'created_by') {
+  const access = buildOwnerAccess(auth, ownerField, values.length + 1);
+  if (!access.clause) return { sql: whereSql, values };
+  const prefix = whereSql && whereSql.trim() ? `${whereSql} AND ` : 'WHERE ';
+  return {
+    sql: `${prefix}${access.clause}`,
+    values: [...values, ...access.values],
+  };
+}
+
+export async function getOwnedRecord(pool, {
+  table,
+  id,
+  auth = {},
+  idField = 'id',
+  ownerField = 'created_by',
+  select = '*',
+}) {
+  assertSqlIdentifier(table);
+  assertSqlIdentifier(idField);
+  assertSqlIdentifier(ownerField);
+  const where = appendOwnerAccess(
+    `WHERE ${idField} = $1`,
+    [id],
+    auth,
+    ownerField,
+  );
+  const result = await pool.query(
+    `SELECT ${select} FROM ${table} ${where.sql} LIMIT 1`,
+    where.values,
+  );
+  return result.rows[0] || null;
 }
 
 export function buildWhere(query = {}, def, auth = {}) {

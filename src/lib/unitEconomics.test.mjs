@@ -7,6 +7,7 @@ import {
   normalizeUnitEconomicsInput,
 } from './unitEconomics.js';
 import { buildCalculationPayload } from './calculationPayload.js';
+import { buildCalculatorSeed } from './calculatorSeed.js';
 import {
   buildCalculatorViewModel,
   getLogisticsSensitivityField,
@@ -316,5 +317,132 @@ describe('logistics calculations', () => {
     assert.equal(cost.total, 149.9);
     assert.equal(compatibility.available, false);
     assert.match(compatibility.restrictions[0], /25л/);
+  });
+});
+
+describe('calculator seed from marketplace snapshots', () => {
+  const defaultForm = {
+    fulfillment_mode: 'FBO',
+    price: 0,
+    wb_commission_pct: 15,
+    tax_system: 'usn_income',
+    tax_pct: 6,
+    logistics_direction: 'moscow',
+    fbo_wb_logistics: 0,
+    fbo_storage: 0,
+    fbs_last_mile: 0,
+    fbs_storage: 0,
+  };
+
+  it('uses latest ProductSnapshot values before Product defaults', () => {
+    const seed = buildCalculatorSeed({
+      defaultForm,
+      product: {
+        id: 'product-1',
+        category: 'Старая категория',
+        price: 1000,
+        sale_price: 900,
+        size_length_cm: 10,
+        weight_kg: 0.3,
+      },
+      productSnapshots: [
+        {
+          updatedAt: '2026-05-12T00:00:00.000Z',
+          price: 1500,
+          data: {
+            product: {
+              salePrice: 1400,
+              price: 1600,
+              category: 'Дом',
+              sizeLengthCm: 30,
+              sizeWidthCm: 20,
+              sizeHeightCm: 10,
+              weightKg: 0.5,
+            },
+          },
+        },
+      ],
+    });
+
+    assert.equal(seed.price, 1400);
+    assert.equal(seed.wb_cabinet_price, 1600);
+    assert.equal(seed.category, 'Дом');
+    assert.equal(seed.size_length_cm, 30);
+    assert.equal(seed.size_width_cm, 20);
+    assert.equal(seed.size_height_cm, 10);
+    assert.equal(seed.weight_kg, 0.5);
+  });
+
+  it('applies synced WB commission directory by fulfillment model', () => {
+    const fbo = buildCalculatorSeed({
+      defaultForm: { ...defaultForm, fulfillment_mode: 'FBO' },
+      product: { id: 'product-1', category: 'Дом', wb_commission_pct: 20 },
+      commissionDirectories: [
+        {
+          source: 'wildberries',
+          category_name: 'Дом',
+          commission_pct: 14.5,
+          commission_by_model: { kgvpMarketplace: 14.5, kgvpSupplier: 11.5 },
+        },
+      ],
+    });
+    const fbs = buildCalculatorSeed({
+      defaultForm: { ...defaultForm, fulfillment_mode: 'FBS' },
+      product: { id: 'product-1', category: 'Дом', wb_commission_pct: 20, fulfillment_mode: 'FBS' },
+      commissionDirectories: [
+        {
+          source: 'wildberries',
+          category_name: 'Дом',
+          commission_pct: 14.5,
+          commission_by_model: { kgvpMarketplace: 14.5, kgvpSupplier: 11.5 },
+        },
+      ],
+    });
+
+    assert.equal(fbo.wb_commission_pct, 14.5);
+    assert.equal(fbs.wb_commission_pct, 11.5);
+  });
+
+  it('applies logistics directory tariffs to the active calculation channel', () => {
+    const seed = buildCalculatorSeed({
+      defaultForm: { ...defaultForm, fulfillment_mode: 'FBS' },
+      product: {
+        id: 'product-1',
+        category: 'Дом',
+        fulfillment_mode: 'FBS',
+        weight_kg: 1,
+        size_length_cm: 50,
+        size_width_cm: 50,
+        size_height_cm: 50,
+      },
+      logisticsDirectoriesMap: {
+        wildberries: [
+          {
+            direction_id: 'moscow',
+            tariffs: {
+              FBS: { base: 100, per_kg: 2, storage: 5 },
+            },
+          },
+        ],
+      },
+    });
+
+    assert.equal(seed.fbs_last_mile, 149.9);
+    assert.equal(seed.fbs_storage, 5);
+  });
+
+  it('falls back to Product commission and defaults when snapshots are empty', () => {
+    const seed = buildCalculatorSeed({
+      defaultForm,
+      product: {
+        id: 'product-1',
+        price: 1000,
+        wb_commission_pct: 19,
+      },
+    });
+
+    assert.equal(seed.price, 1000);
+    assert.equal(seed.wb_commission_pct, 19);
+    assert.equal(seed.tax_pct, 6);
   });
 });

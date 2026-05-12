@@ -24,3 +24,10 @@ export function createJobWorker(processor) {
     concurrency: Number(process.env.WORKER_CONCURRENCY || 3)
   });
 }
+
+export async function closeQueueResources() {
+  await Promise.allSettled([
+    jobQueue.close(),
+    connection.quit().catch(() => connection.disconnect()),
+  ]);
+}

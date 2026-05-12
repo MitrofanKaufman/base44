@@ -1,7 +1,7 @@
 import { jobQueue } from './queue.js';
 
-export function registerQueueRoutes(app, requireAuth) {
-  app.post('/queue/enqueue', requireAuth, async (req, res) => {
+export function registerQueueRoutes(app, requireAuth, requireAdmin) {
+  app.post('/queue/enqueue', requireAuth, requireAdmin, async (req, res) => {
     const { name = 'default', data = {} } = req.body || {};
     const job = await jobQueue.add(name, data, {
       removeOnComplete: true,

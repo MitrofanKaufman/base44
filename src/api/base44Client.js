@@ -1,5 +1,6 @@
 const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL || '/api').replace(/\/+$/, '');
 const TOKEN_STORAGE_KEYS = ['base44_access_token', 'token'];
+let memoryAccessToken = null;
 
 class ApiError extends Error {
   constructor(message, status, data) {
@@ -11,26 +12,24 @@ class ApiError extends Error {
 }
 
 function getStoredToken() {
-  if (typeof window === 'undefined') return null;
-  for (const key of TOKEN_STORAGE_KEYS) {
-    const value = window.localStorage.getItem(key);
-    if (value) return value;
-  }
-  return null;
+  return memoryAccessToken;
 }
 
 function storeToken(token) {
-  if (typeof window === 'undefined' || !token) return;
-  for (const key of TOKEN_STORAGE_KEYS) {
-    window.localStorage.setItem(key, token);
-  }
+  memoryAccessToken = token || null;
+  clearPersistedTokens();
 }
 
-function clearToken() {
+function clearPersistedTokens() {
   if (typeof window === 'undefined') return;
   for (const key of TOKEN_STORAGE_KEYS) {
     window.localStorage.removeItem(key);
   }
+}
+
+function clearToken() {
+  memoryAccessToken = null;
+  clearPersistedTokens();
 }
 
 function toQueryString(params = {}) {

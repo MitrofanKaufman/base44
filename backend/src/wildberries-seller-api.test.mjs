@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import {
   normalizeDirectoryPayload,
+  normalizeWbCommissionDirectory,
   normalizeWbLogisticsDirections,
   WbSellerApi,
 } from './wildberries-seller-api.js';
@@ -112,4 +113,54 @@ test('normalizeWbLogisticsDirections creates current LogisticsDirectory records'
   assert.equal(directions[1].direction_id, 'suppliesWarehouses:202');
   assert.equal(directions[1].direction_name, 'Коледино');
   assert.equal(directions[1].raw_data.type, 'warehouse');
+});
+
+test('normalizeWbCommissionDirectory maps WB commission report rows by fulfillment model', () => {
+  const rows = normalizeWbCommissionDirectory({
+    report: [
+      {
+        subjectID: 123,
+        subjectName: 'Дом',
+        parentID: 10,
+        parentName: 'Товары для дома',
+        kgvpMarketplace: 14.5,
+        kgvpSupplier: '11,5',
+        kgvpPickup: 7,
+        kgvpBooking: 8,
+        kgvpSupplierExpress: 18,
+        paidStorageKgvp: 2,
+      },
+    ],
+  }, { syncedAt: '2026-05-12T00:00:00.000Z' });
+
+  assert.equal(rows.length, 1);
+  assert.deepEqual(rows[0], {
+    source: 'wildberries',
+    category_id: '123',
+    category_name: 'Дом',
+    parent_category_id: '10',
+    parent_category_name: 'Товары для дома',
+    commission_pct: 14.5,
+    commission_by_model: {
+      kgvpMarketplace: 14.5,
+      kgvpSupplier: 11.5,
+      kgvpPickup: 7,
+      kgvpBooking: 8,
+      kgvpSupplierExpress: 18,
+      paidStorageKgvp: 2,
+    },
+    raw_data: {
+      subjectID: 123,
+      subjectName: 'Дом',
+      parentID: 10,
+      parentName: 'Товары для дома',
+      kgvpMarketplace: 14.5,
+      kgvpSupplier: '11,5',
+      kgvpPickup: 7,
+      kgvpBooking: 8,
+      kgvpSupplierExpress: 18,
+      paidStorageKgvp: 2,
+    },
+    synced_at: '2026-05-12T00:00:00.000Z',
+  });
 });

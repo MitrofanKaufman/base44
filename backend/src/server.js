@@ -5,6 +5,7 @@ import morgan from 'morgan';
 import dotenv from 'dotenv';
 import swaggerUi from 'swagger-ui-express';
 import cookieParser from 'cookie-parser';
+import rateLimit from 'express-rate-limit';
 import { getPool } from './db.js';
 import { entityDefinitions } from './entity-definitions.js';
 import { openapi } from './swagger.js';
@@ -31,6 +32,20 @@ app.use(cors({
 app.use(cookieParser());
 app.use(express.json({ limit: '5mb' }));
 app.use(morgan('combined'));
+
+const authRateLimiter = rateLimit({
+  windowMs: Number(process.env.AUTH_RATE_LIMIT_WINDOW_MS || 15 * 60 * 1000),
+  limit: Number(process.env.AUTH_RATE_LIMIT_MAX || 20),
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
+const wbSyncRateLimiter = rateLimit({
+  windowMs: Number(process.env.WB_SYNC_RATE_LIMIT_WINDOW_MS || 60 * 1000),
+  limit: Number(process.env.WB_SYNC_RATE_LIMIT_MAX || 30),
+  standardHeaders: true,
+  legacyHeaders: false,
+});
 
 const pool = getPool();
 
@@ -184,11 +199,11 @@ app.get('/healthz', async (_req, res) => {
   res.json({ ok: true });
 });
 
-app.get('/openapi.json', (_req, res) => res.json(openapi));
-app.use('/docs', swaggerUi.serve, swaggerUi.setup(openapi));
-registerAuthRoutes(app, pool);
-registerQueueRoutes(app, requireAuth);
-registerWildberriesRoutes(app, pool, requireAuth);
+app.get('/openapi.json', requireAuth, requireRole('admin'), (_req, res) => res.json(openapi));
+app.use('/docs', requireAuth, requireRole('admin'), swaggerUi.serve, swaggerUi.setup(openapi));
+registerAuthRoutes(app, pool, { authRateLimiter });
+registerQueueRoutes(app, requireAuth, requireRole('admin'));
+registerWildberriesRoutes(app, pool, requireAuth, { syncRateLimiter: wbSyncRateLimiter });
 
 for (const [name, def] of Object.entries(entityDefinitions)) {
   registerEntity(name, def);

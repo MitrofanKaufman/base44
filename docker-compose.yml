@@ -24,7 +24,7 @@ services:
   worker:
     build:
       context: ./backend
-    command: ["npm", "run", "worker"]
+    command: ["node", "src/worker.js"]
     depends_on:
       postgres:
         condition: service_healthy
@@ -89,7 +89,7 @@ services:
     restart: unless-stopped
 
   nginx:
-    image: nginx:1.27-alpine
+    image: nginx:1.30-alpine-slim
     depends_on:
       - api
       - app

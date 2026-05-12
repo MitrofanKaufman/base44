@@ -3,7 +3,7 @@ import { Box, Truck, Megaphone, ShieldCheck, RefreshCw } from 'lucide-react';
 import LogisticsDirectionSelector from './LogisticsDirectionSelector';
 import PickupPointSelector from './PickupPointSelector';
 import { calculateLogisticsCost, clearTariffCache, getTariffs } from '@/lib/LogisticsService';
-import { syncLogisticsDirectory } from '@/lib/MarketplaceAPI';
+import { syncLogisticsDirectory, syncWbCommissionDirectory } from '@/lib/MarketplaceAPI';
 
 const TAX_SYSTEMS = [
   { value: 'usn_income',         label: 'УСН Доходы',         hint: '% от выручки' },
@@ -54,6 +54,12 @@ export default function CostInputsGrid({ form, setField, selectedProduct = null,
     onSuccess: () => {
       clearTariffCache();
       qc.invalidateQueries({ queryKey: ['logistics-directories'] });
+    },
+  });
+  const commissionSyncMutation = useMutation({
+    mutationFn: () => syncWbCommissionDirectory(selectedClientId),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['commission-directories'] });
     },
   });
 
@@ -178,7 +184,22 @@ export default function CostInputsGrid({ form, setField, selectedProduct = null,
       </Section>
 
       {/* НАЛОГИ И КОМИССИИ */}
-      <Section icon={ShieldCheck} title="Налоги и комиссии" color="bg-emerald-100 text-emerald-600">
+      <Section
+        icon={ShieldCheck}
+        title="Налоги и комиссии"
+        color="bg-emerald-100 text-emerald-600"
+        action={(
+          <button
+            type="button"
+            onClick={() => commissionSyncMutation.mutate()}
+            disabled={!selectedClientId || commissionSyncMutation.isPending}
+            title={selectedClientId ? 'Синхронизировать комиссии WB' : 'Выберите товар клиента с WB token'}
+            className="w-7 h-7 rounded-md border border-border bg-secondary/40 text-muted-foreground hover:text-foreground hover:bg-secondary transition-colors disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center flex-shrink-0"
+          >
+            <RefreshCw className={`w-3.5 h-3.5 ${commissionSyncMutation.isPending ? 'animate-spin' : ''}`} />
+          </button>
+        )}
+      >
         {/* Компактный переключатель системы налогообложения */}
         <div className="mb-2 pb-2 border-b border-border/40">
           <span className="text-[10px] text-muted-foreground font-semibold uppercase tracking-wide block mb-1">Система налогообложения</span>
@@ -216,6 +237,11 @@ export default function CostInputsGrid({ form, setField, selectedProduct = null,
         <NumField label="Комиссия WB"        value={form.wb_commission_pct} onChange={v => setField('wb_commission_pct', v)} suffix="%" step="0.1" />
         <NumField label="Возвраты"           value={form.return_rate_pct}   onChange={v => setField('return_rate_pct', v)}   suffix="%" step="0.1" />
         <NumField label="Потеря на возврате" value={form.return_loss}       onChange={v => setField('return_loss', v)} />
+        {commissionSyncMutation.isError && (
+          <div className="text-[10px] text-destructive leading-tight pt-2">
+            {commissionSyncMutation.error?.message || 'Ошибка синхронизации комиссий WB'}
+          </div>
+        )}
       </Section>
     </div>
   );

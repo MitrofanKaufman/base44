@@ -1,7 +1,6 @@
 import { useState } from 'react';
 import { Store, Copy, ChevronDown, Info } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { getCommissionByProduct } from '@/lib/CommissionService';
 import ProductPickerDropdown from './ProductPickerDropdown';
 
 /* Tiny price input */
@@ -93,9 +92,6 @@ export default function ProductHeader({ products, selectedProduct, onSelect, for
             selectedProduct={selectedProduct}
             onSelect={p => { 
               onSelect(p);
-              // Автоматически устанавливаем комиссию WB из категории товара
-              const commission = getCommissionByProduct(p, 'wildberries');
-              setField('wb_commission_pct', commission);
               setPickerOpen(false);
             }}
             onClose={() => setPickerOpen(false)}
@@ -107,7 +103,7 @@ export default function ProductHeader({ products, selectedProduct, onSelect, for
           <div className="flex items-center gap-1.5 px-2 py-1 mt-1 rounded bg-primary/5 border border-primary/20 text-[10px]">
             <Info className="w-3 h-3 text-primary flex-shrink-0" />
             <span className="text-muted-foreground">
-              Комиссия WB: <strong className="text-foreground">{getCommissionByProduct(selectedProduct, 'wildberries')}%</strong> 
+              Комиссия WB: <strong className="text-foreground">{form.wb_commission_pct || 15}%</strong>
               {selectedProduct.category && <span> за {selectedProduct.category}</span>}
             </span>
           </div>

@@ -1,8 +1,10 @@
 import {
+  normalizeWbCommissionDirectory,
   normalizeWbLogisticsDirections,
   WbSellerApi,
   WbSellerApiError,
 } from './wildberries-seller-api.js';
+import { assertOwnedReferences, getOwnedRecord, isAdminAuth } from './entity-access.js';
 import { jobQueue, WB_COLLECT_PRODUCT_JOB } from './queue.js';
 import {
   collectWbProduct,
@@ -15,6 +17,7 @@ import {
   listWbJobs,
   markWbJobCanceled,
   saveWbCollectionResult,
+  upsertMarketplaceCommissionDirectory,
 } from './wildberries-repository.js';
 
 const tokenMeta = (token) => {
@@ -26,20 +29,24 @@ const tokenMeta = (token) => {
   };
 };
 
-const getClient = async (pool, clientId) => {
-  const result = await pool.query(
-    'SELECT id, name, wb_api_token FROM clients WHERE id = $1',
-    [clientId],
-  );
-  return result.rows[0] || null;
+const getClient = async (pool, clientId, auth) => {
+  return getOwnedRecord(pool, {
+    table: 'clients',
+    id: clientId,
+    auth,
+    ownerField: 'created_by',
+    select: 'id, name, wb_api_token, created_by',
+  });
 };
 
-const getProduct = async (pool, productId) => {
-  const result = await pool.query(
-    'SELECT id, wb_sku, project_id, client_id FROM products WHERE id = $1',
-    [productId],
-  );
-  return result.rows[0] || null;
+const getProduct = async (pool, productId, auth) => {
+  return getOwnedRecord(pool, {
+    table: 'products',
+    id: productId,
+    auth,
+    ownerField: 'created_by',
+    select: 'id, wb_sku, project_id, client_id, created_by',
+  });
 };
 
 const upsertLogisticsDirection = async (pool, direction, createdBy) => {
@@ -60,8 +67,9 @@ const upsertLogisticsDirection = async (pool, direction, createdBy) => {
            synced_at = $6::timestamptz,
            updated_date = now()
      WHERE source = $1 AND direction_id = $2
+       AND created_by = $7
      RETURNING id`,
-    values,
+    [...values, createdBy || null],
   );
 
   if (updated.rowCount > 0) return { inserted: false, updated: updated.rowCount };
@@ -112,7 +120,13 @@ const toPreviewResponse = (collection) => {
   };
 };
 
-export function registerWildberriesRoutes(app, pool, requireAuth) {
+const syncMiddlewares = (requireAuth, syncRateLimiter) => (
+  syncRateLimiter ? [requireAuth, syncRateLimiter] : [requireAuth]
+);
+
+export function registerWildberriesRoutes(app, pool, requireAuth, options = {}) {
+  const syncAuth = syncMiddlewares(requireAuth, options.syncRateLimiter);
+
   app.get('/wildberries/products/:article/preview', requireAuth, async (req, res, next) => {
     try {
       const collection = await collectWbProduct(req.params.article, {
@@ -127,8 +141,15 @@ export function registerWildberriesRoutes(app, pool, requireAuth) {
     }
   });
 
-  app.post('/wildberries/products/:article/collect', requireAuth, async (req, res, next) => {
+  app.post('/wildberries/products/:article/collect', ...syncAuth, async (req, res, next) => {
     try {
+      const productId = req.body?.product_id ?? req.body?.productId;
+      let productOwnerEmail = req.auth?.email;
+      if (productId) {
+        const product = await getProduct(pool, productId, req.auth);
+        if (!product) return res.status(404).json({ error: 'Product not found' });
+        productOwnerEmail = product.created_by || req.auth?.email;
+      }
       const collection = await collectWbProduct(req.params.article, {
         query: req.body?.query,
         timeoutMs: Number(req.body?.timeout_ms || req.body?.timeoutMs || process.env.WB_FETCH_TIMEOUT_MS || 15_000),
@@ -143,7 +164,7 @@ export function registerWildberriesRoutes(app, pool, requireAuth) {
             article: req.params.article,
             product_id: req.body?.product_id ?? req.body?.productId,
           },
-          req.auth?.email,
+          { userEmail: req.auth?.email, ownerEmail: productOwnerEmail },
         );
       return res.json({ ...toPreviewResponse(collection), persistence });
     } catch (error) {
@@ -153,9 +174,9 @@ export function registerWildberriesRoutes(app, pool, requireAuth) {
     }
   });
 
-  app.post('/wildberries/products/:productId/sync', requireAuth, async (req, res, next) => {
+  app.post('/wildberries/products/:productId/sync', ...syncAuth, async (req, res, next) => {
     try {
-      const product = await getProduct(pool, req.params.productId);
+      const product = await getProduct(pool, req.params.productId, req.auth);
       if (!product) return res.status(404).json({ error: 'Product not found' });
       const article = String(product.wb_sku || '').trim();
       if (!article) return res.status(400).json({ error: 'Product has no WB SKU' });
@@ -174,7 +195,7 @@ export function registerWildberriesRoutes(app, pool, requireAuth) {
           project_id: product.project_id,
           client_id: product.client_id,
         },
-        req.auth?.email,
+        { userEmail: req.auth?.email, ownerEmail: product.created_by || req.auth?.email },
       );
       return res.json({ ...toPreviewResponse(collection), persistence });
     } catch (error) {
@@ -184,7 +205,7 @@ export function registerWildberriesRoutes(app, pool, requireAuth) {
     }
   });
 
-  app.post('/wildberries/jobs', requireAuth, async (req, res, next) => {
+  app.post('/wildberries/jobs', ...syncAuth, async (req, res, next) => {
     try {
       const payload = {
         ...(req.body || {}),
@@ -193,7 +214,8 @@ export function registerWildberriesRoutes(app, pool, requireAuth) {
         client_id: req.body?.client_id ?? req.body?.clientId,
         user_email: req.auth?.email,
       };
-      const jobRecord = await createWbJobRecord(pool, payload, req.auth?.email);
+      await assertOwnedReferences(pool, req.auth, payload);
+      const jobRecord = await createWbJobRecord(pool, payload, req.auth?.email, undefined, req.auth);
       await jobQueue.add(
         WB_COLLECT_PRODUCT_JOB,
         {
@@ -216,7 +238,7 @@ export function registerWildberriesRoutes(app, pool, requireAuth) {
 
   app.get('/wildberries/jobs', requireAuth, async (req, res, next) => {
     try {
-      const items = await listWbJobs(pool, req.query.limit || 100);
+      const items = await listWbJobs(pool, req.query.limit || 100, req.auth);
       return res.json({ ok: true, items });
     } catch (error) {
       return next(error);
@@ -225,7 +247,7 @@ export function registerWildberriesRoutes(app, pool, requireAuth) {
 
   app.get('/wildberries/jobs/:id', requireAuth, async (req, res, next) => {
     try {
-      const job = await getWbJob(pool, req.params.id);
+      const job = await getWbJob(pool, req.params.id, req.auth);
       if (!job) return res.status(404).json({ error: 'Job not found' });
       return res.json({ ok: true, job });
     } catch (error) {
@@ -235,12 +257,14 @@ export function registerWildberriesRoutes(app, pool, requireAuth) {
 
   app.post('/wildberries/jobs/:id/cancel', requireAuth, async (req, res, next) => {
     try {
+      const jobRecord = await getWbJob(pool, req.params.id, req.auth);
+      if (!jobRecord) return res.status(404).json({ error: 'Job not found' });
       const bullJob = await jobQueue.getJob(req.params.id);
       if (bullJob) {
         await bullJob.discard();
         await bullJob.remove();
       }
-      const job = await markWbJobCanceled(pool, req.params.id);
+      const job = await markWbJobCanceled(pool, req.params.id, req.auth);
       return res.json({ ok: Boolean(job), job });
     } catch (error) {
       return next(error);
@@ -249,7 +273,7 @@ export function registerWildberriesRoutes(app, pool, requireAuth) {
 
   app.get('/wildberries/clients/:clientId/seller-token', requireAuth, async (req, res, next) => {
     try {
-      const client = await getClient(pool, req.params.clientId);
+      const client = await getClient(pool, req.params.clientId, req.auth);
       if (!client) return res.status(404).json({ error: 'Client not found' });
       return res.json(tokenMeta(client.wb_api_token));
     } catch (error) {
@@ -260,13 +284,17 @@ export function registerWildberriesRoutes(app, pool, requireAuth) {
   app.put('/wildberries/clients/:clientId/seller-token', requireAuth, async (req, res, next) => {
     try {
       const token = req.body?.token === null ? '' : String(req.body?.token ?? '').trim();
+      const ownerClause = isAdminAuth(req.auth) ? '' : ' AND created_by = $3';
+      const values = isAdminAuth(req.auth)
+        ? [req.params.clientId, token || null]
+        : [req.params.clientId, token || null, req.auth.email];
       const result = await pool.query(
         `UPDATE clients
             SET wb_api_token = $2,
                 updated_date = now()
-          WHERE id = $1
+          WHERE id = $1${ownerClause}
           RETURNING wb_api_token`,
-        [req.params.clientId, token || null],
+        values,
       );
       if (!result.rows[0]) return res.status(404).json({ error: 'Client not found' });
       return res.json(tokenMeta(result.rows[0].wb_api_token));
@@ -275,9 +303,9 @@ export function registerWildberriesRoutes(app, pool, requireAuth) {
     }
   });
 
-  app.post('/wildberries/clients/:clientId/logistics-directions/sync', requireAuth, async (req, res, next) => {
+  app.post('/wildberries/clients/:clientId/logistics-directions/sync', ...syncAuth, async (req, res, next) => {
     try {
-      const client = await getClient(pool, req.params.clientId);
+      const client = await getClient(pool, req.params.clientId, req.auth);
       if (!client) return res.status(404).json({ error: 'Client not found' });
 
       const token = String(client.wb_api_token ?? '').trim();
@@ -316,8 +344,9 @@ export function registerWildberriesRoutes(app, pool, requireAuth) {
 
       let inserted = 0;
       let updated = 0;
+      const ownerEmail = client.created_by || req.auth?.email;
       for (const direction of directions) {
-        const result = await upsertLogisticsDirection(pool, direction, req.auth?.email);
+        const result = await upsertLogisticsDirection(pool, direction, ownerEmail);
         if (result.inserted) inserted += 1;
         updated += result.updated;
       }
@@ -334,6 +363,45 @@ export function registerWildberriesRoutes(app, pool, requireAuth) {
         errors,
         token: tokenMeta(token),
         directions,
+      });
+    } catch (error) {
+      const { status, message } = toClientError(error);
+      if (status >= 500 && !(error instanceof WbSellerApiError)) return next(error);
+      return res.status(status).json({ error: message });
+    }
+  });
+
+  app.post('/wildberries/clients/:clientId/commission-directory/sync', ...syncAuth, async (req, res, next) => {
+    try {
+      const client = await getClient(pool, req.params.clientId, req.auth);
+      if (!client) return res.status(404).json({ error: 'Client not found' });
+
+      const token = String(client.wb_api_token ?? '').trim();
+      if (!token) {
+        return res.status(400).json({ error: 'WB Seller API token is not configured for this client' });
+      }
+
+      const timeoutMs = Number(process.env.WB_SELLER_API_TIMEOUT_MS || 15_000);
+      const api = new WbSellerApi();
+      const payload = await api.getCommissionRaw({
+        token,
+        timeoutMs,
+        query: { locale: req.body?.locale || req.query?.locale || 'ru' },
+      });
+      const syncedAt = new Date().toISOString();
+      const rows = normalizeWbCommissionDirectory(payload, { syncedAt });
+      const ownerEmail = client.created_by || req.auth?.email;
+      const saved = await upsertMarketplaceCommissionDirectory(pool, rows, ownerEmail);
+
+      return res.json({
+        ok: true,
+        source: 'wildberries',
+        client_id: client.id,
+        client_name: client.name,
+        synced_at: syncedAt,
+        count: saved.length,
+        token: tokenMeta(token),
+        items: saved,
       });
     } catch (error) {
       const { status, message } = toClientError(error);

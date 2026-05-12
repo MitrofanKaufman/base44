@@ -1,4 +1,5 @@
 import { createHash, randomUUID } from 'node:crypto';
+import { appendOwnerAccess, isAdminAuth } from './entity-access.js';
 import { collectWbProduct, mapWbCollectionToProductFields } from './wildberries-public-api.js';
 
 const JOB_STATUSES = new Set(['queued', 'running', 'done', 'failed', 'canceled']);
@@ -119,20 +120,44 @@ export async function ensureWildberriesCollectionTables(pool) {
   `);
   await pool.query('CREATE INDEX IF NOT EXISTS idx_wb_raw_article_fetched ON wb_raw(article, fetched_at DESC)');
   await pool.query('CREATE INDEX IF NOT EXISTS idx_wb_raw_user_fetched ON wb_raw(user_email, fetched_at DESC)');
+
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS marketplace_commission_directories (
+      id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
+      source TEXT NOT NULL CHECK (source IN ('wildberries', 'yandex', 'ozon')),
+      category_id TEXT NOT NULL,
+      category_name TEXT NOT NULL,
+      parent_category_id TEXT,
+      parent_category_name TEXT,
+      commission_pct NUMERIC,
+      commission_by_model JSONB NOT NULL DEFAULT '{}'::jsonb,
+      raw_data JSONB,
+      synced_at TIMESTAMPTZ,
+      created_date TIMESTAMPTZ NOT NULL DEFAULT now(),
+      updated_date TIMESTAMPTZ NOT NULL DEFAULT now(),
+      created_by TEXT
+    )
+  `);
+  await pool.query(`
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_marketplace_commission_owner_category
+      ON marketplace_commission_directories(source, category_id, created_by)
+  `);
+  await pool.query('CREATE INDEX IF NOT EXISTS idx_marketplace_commission_category_name ON marketplace_commission_directories(source, lower(category_name))');
 }
 
-export async function resolveWbArticleForPayload(pool, payload) {
+export async function resolveWbArticleForPayload(pool, payload, auth = {}) {
   const direct = pickPayloadArticle(payload);
   if (direct) return direct;
 
   const productId = asString(payload.product_id ?? payload.productId);
   if (!productId) return undefined;
-  const result = await pool.query('SELECT wb_sku FROM products WHERE id = $1', [productId]);
+  const where = appendOwnerAccess('WHERE id = $1', [productId], auth, 'created_by');
+  const result = await pool.query(`SELECT wb_sku FROM products ${where.sql}`, where.values);
   return asString(result.rows[0]?.wb_sku);
 }
 
-export async function createWbJobRecord(pool, payload, userEmail, id = randomUUID()) {
-  const article = await resolveWbArticleForPayload(pool, payload);
+export async function createWbJobRecord(pool, payload, userEmail, id = randomUUID(), auth = {}) {
+  const article = await resolveWbArticleForPayload(pool, payload, auth);
   if (!article) throw new Error('WB article is required');
   const normalizedPayload = {
     ...payload,
@@ -172,17 +197,19 @@ export async function createWbJobRecord(pool, payload, userEmail, id = randomUUI
   return normalizeJobRow(result.rows[0]);
 }
 
-export async function listWbJobs(pool, limit = 100) {
+export async function listWbJobs(pool, limit = 100, auth = {}) {
   const safeLimit = Math.max(1, Math.min(500, Number(limit || 100)));
+  const where = appendOwnerAccess('', [], auth, 'user_email');
   const result = await pool.query(
-    'SELECT * FROM wb_jobs ORDER BY updated_at DESC LIMIT $1',
-    [safeLimit],
+    `SELECT * FROM wb_jobs ${where.sql} ORDER BY updated_at DESC LIMIT $${where.values.length + 1}`,
+    [...where.values, safeLimit],
   );
   return result.rows.map(normalizeJobRow).filter(Boolean);
 }
 
-export async function getWbJob(pool, id) {
-  const result = await pool.query('SELECT * FROM wb_jobs WHERE id = $1', [id]);
+export async function getWbJob(pool, id, auth = {}) {
+  const where = appendOwnerAccess('WHERE id = $1', [id], auth, 'user_email');
+  const result = await pool.query(`SELECT * FROM wb_jobs ${where.sql}`, where.values);
   return normalizeJobRow(result.rows[0]);
 }
 
@@ -264,16 +291,18 @@ export async function markWbJobFailed(pool, id, error, patch = {}) {
   return normalizeJobRow(result.rows[0]);
 }
 
-export async function markWbJobCanceled(pool, id) {
+export async function markWbJobCanceled(pool, id, auth = {}) {
+  const ownerSql = isAdminAuth(auth) ? '' : ' AND user_email = $2';
+  const values = isAdminAuth(auth) ? [id] : [id, auth.email];
   const result = await pool.query(
     `UPDATE wb_jobs
         SET status = 'canceled',
             progress = 0,
             finished_at = now(),
             updated_at = now()
-      WHERE id = $1 AND status IN ('queued', 'running')
+      WHERE id = $1 AND status IN ('queued', 'running')${ownerSql}
       RETURNING *`,
-    [id],
+    values,
   );
   return normalizeJobRow(result.rows[0]);
 }
@@ -304,7 +333,7 @@ const getProductPatch = (collection) => {
   return Object.fromEntries(Object.entries(entries).filter(([, value]) => value !== undefined && value !== null && value !== ''));
 };
 
-const updateProductFromCollection = async (pool, productId, collection) => {
+const updateProductFromCollection = async (pool, productId, collection, ownerEmail) => {
   if (!productId) return null;
   const patch = getProductPatch(collection);
   const entries = Object.entries(patch);
@@ -312,18 +341,21 @@ const updateProductFromCollection = async (pool, productId, collection) => {
 
   const sets = entries.map(([key], index) => `${key} = $${index + 2}`);
   const values = entries.map(([, value]) => value);
+  const ownerClause = ownerEmail ? ` AND created_by = $${values.length + 2}` : '';
   const result = await pool.query(
     `UPDATE products
         SET ${sets.join(', ')},
             updated_date = now()
-      WHERE id = $1
+      WHERE id = $1${ownerClause}
       RETURNING *`,
-    [productId, ...values],
+    ownerEmail ? [productId, ...values, ownerEmail] : [productId, ...values],
   );
   return result.rows[0] || null;
 };
 
-export async function saveWbCollectionResult(pool, collection, payload = {}, userEmail) {
+export async function saveWbCollectionResult(pool, collection, payload = {}, options = {}) {
+  const userEmail = typeof options === 'string' ? options : options.userEmail;
+  const ownerEmail = typeof options === 'object' ? options.ownerEmail : userEmail;
   const article = asString(collection.article) || asString(payload.article);
   const fetchedAt = new Date(asNumber(collection.fetchedAt) || Date.now());
   const product = asRecord(collection.product);
@@ -335,7 +367,7 @@ export async function saveWbCollectionResult(pool, collection, payload = {}, use
   await insertJsonRecord(
     pool,
     'INSERT INTO wb_raw (article, fetched_at, data, user_email) VALUES ($1, $2, $3::jsonb, $4)',
-    [article, fetchedAt.toISOString(), json(collection), userEmail || null],
+    [article, fetchedAt.toISOString(), json(collection), ownerEmail || userEmail || null],
   );
 
   await insertJsonRecord(
@@ -344,7 +376,7 @@ export async function saveWbCollectionResult(pool, collection, payload = {}, use
        source, stream, sourceeventid, payloadhash, emittedat, receivedat, traceid,
        payload, processingstatus, created_by
      ) VALUES ('wildberries', 'product', $1, $2, $3, $3, $4, $5::jsonb, 'processed', $6)`,
-    [article, framePayloadHash, fetchedAt.toISOString(), traceId, json(collection), userEmail || null],
+    [article, framePayloadHash, fetchedAt.toISOString(), traceId, json(collection), ownerEmail || userEmail || null],
   );
 
   await insertJsonRecord(
@@ -352,7 +384,7 @@ export async function saveWbCollectionResult(pool, collection, payload = {}, use
     `INSERT INTO marketplace_events (
        schemaversion, type, source, sourceeventid, traceid, data, createdat, created_by
      ) VALUES ('1.0', 'product.update', 'wildberries', $1, $2, $3::jsonb, $4, $5)`,
-    [article, traceId, json(collection), fetchedAt.toISOString(), userEmail || null],
+    [article, traceId, json(collection), fetchedAt.toISOString(), ownerEmail || userEmail || null],
   );
 
   await insertJsonRecord(
@@ -368,7 +400,7 @@ export async function saveWbCollectionResult(pool, collection, payload = {}, use
       asNumber(product.salePrice) ?? asNumber(product.price),
       json(collection),
       fetchedAt.toISOString(),
-      userEmail || null,
+      ownerEmail || userEmail || null,
     ],
   );
 
@@ -384,23 +416,24 @@ export async function saveWbCollectionResult(pool, collection, payload = {}, use
         asNumber(seller.rating),
         json(seller),
         fetchedAt.toISOString(),
-        userEmail || null,
+        ownerEmail || userEmail || null,
       ],
     );
   }
 
-  const updatedProduct = await updateProductFromCollection(pool, productId, collection);
+  const updatedProduct = await updateProductFromCollection(pool, productId, collection, ownerEmail);
   if (productId && (asNumber(product.salePrice) ?? asNumber(product.price)) !== undefined) {
     await insertJsonRecord(
       pool,
       `INSERT INTO price_history (
-         product_id, date, our_price, competitors, notes
-       ) VALUES ($1, $2, $3, '[]'::jsonb, $4)`,
+         product_id, date, our_price, competitors, notes, created_by
+       ) VALUES ($1, $2, $3, '[]'::jsonb, $4, $5)`,
       [
         productId,
         fetchedAt.toISOString(),
         asNumber(product.salePrice) ?? asNumber(product.price),
         'Wildberries collection',
+        ownerEmail || userEmail || null,
       ],
     );
   }
@@ -410,6 +443,50 @@ export async function saveWbCollectionResult(pool, collection, payload = {}, use
     fetchedAt: fetchedAt.toISOString(),
     product: updatedProduct,
   };
+}
+
+export async function upsertMarketplaceCommissionDirectory(pool, rows, ownerEmail) {
+  const synced = [];
+  for (const row of rows) {
+    const result = await pool.query(
+      `INSERT INTO marketplace_commission_directories (
+         source,
+         category_id,
+         category_name,
+         parent_category_id,
+         parent_category_name,
+         commission_pct,
+         commission_by_model,
+         raw_data,
+         synced_at,
+         created_by
+       ) VALUES ($1, $2, $3, $4, $5, $6, $7::jsonb, $8::jsonb, $9::timestamptz, $10)
+       ON CONFLICT (source, category_id, created_by) DO UPDATE SET
+         category_name = EXCLUDED.category_name,
+         parent_category_id = EXCLUDED.parent_category_id,
+         parent_category_name = EXCLUDED.parent_category_name,
+         commission_pct = EXCLUDED.commission_pct,
+         commission_by_model = EXCLUDED.commission_by_model,
+         raw_data = EXCLUDED.raw_data,
+         synced_at = EXCLUDED.synced_at,
+         updated_date = now()
+       RETURNING *`,
+      [
+        row.source,
+        row.category_id,
+        row.category_name,
+        row.parent_category_id || null,
+        row.parent_category_name || null,
+        asNumber(row.commission_pct) ?? null,
+        json(row.commission_by_model),
+        json(row.raw_data),
+        row.synced_at,
+        ownerEmail || null,
+      ],
+    );
+    synced.push(result.rows[0]);
+  }
+  return synced;
 }
 
 export async function processWbCollectProductJob(pool, bullJob) {
