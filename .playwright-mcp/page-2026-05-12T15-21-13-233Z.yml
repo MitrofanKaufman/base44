@@ -1,0 +1,51 @@
+- generic [ref=e5]:
+  - generic [ref=e6]:
+    - generic [ref=e7]:
+      - img [ref=e9]
+      - generic [ref=e11]:
+        - paragraph [ref=e12]: unit.marketing
+        - heading "Рабочее пространство аналитики маркетплейсов" [level=1] [ref=e13]
+    - generic [ref=e14]:
+      - generic [ref=e15]:
+        - img [ref=e16]
+        - paragraph [ref=e19]: JWT-сессия
+      - generic [ref=e20]:
+        - img [ref=e21]
+        - paragraph [ref=e24]: Роли пользователей
+      - generic [ref=e25]:
+        - img [ref=e26]
+        - paragraph [ref=e29]: Защищенный API
+  - generic [ref=e30]:
+    - generic [ref=e31]:
+      - generic [ref=e32]:
+        - heading "Создать аккаунт" [level=2] [ref=e49]
+        - paragraph [ref=e34]: Первый зарегистрированный пользователь станет администратором.
+      - generic [ref=e35]:
+        - button "Вход" [ref=e36] [cursor=pointer]
+        - button "Регистрация" [active] [ref=e37] [cursor=pointer]
+    - generic [ref=e39]:
+      - generic [ref=e50]:
+        - text: Имя
+        - generic [ref=e51]:
+          - img
+          - textbox "Имя" [ref=e52]:
+            - /placeholder: Иван Иванов
+      - generic [ref=e40]:
+        - text: Email
+        - generic [ref=e41]:
+          - img
+          - textbox "Email" [ref=e42]:
+            - /placeholder: user@example.com
+      - generic [ref=e43]:
+        - text: Пароль
+        - generic [ref=e44]:
+          - img
+          - textbox "Пароль" [ref=e45]:
+            - /placeholder: "********"
+      - generic [ref=e53]:
+        - text: Повторите пароль
+        - generic [ref=e54]:
+          - img
+          - textbox "Повторите пароль" [ref=e55]:
+            - /placeholder: "********"
+      - button "Зарегистрироваться" [ref=e56] [cursor=pointer]

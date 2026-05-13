@@ -30,6 +30,9 @@ export default function MarketplaceDataSync({ productId, selectedProduct, onData
       
       if (onDataUpdate) {
         const patch = { price: data.current_price };
+        if (data.persistence?.product) {
+          patch.product = data.persistence.product;
+        }
         if (data.commission_pct !== undefined && data.commission_pct !== null) {
           patch.wb_commission_pct = data.commission_pct;
         }

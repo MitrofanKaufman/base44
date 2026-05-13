@@ -29,11 +29,14 @@ export default function PriceHistoryChart({ productId, selectedProduct }) {
         .map(r => ({
           date: new Date(r.date).toLocaleDateString('ru-RU'),
           dateObj: new Date(r.date),
-          our_price: r.our_price,
-          margin_pct: r.margin_pct,
-          cost: r.cost,
+          our_price: Number(r.our_price) || 0,
+          margin_pct: r.margin_pct == null ? null : Number(r.margin_pct),
+          cost: r.cost == null ? null : Number(r.cost),
           notes: r.notes,
-          competitors: r.competitors || []
+          competitors: (r.competitors || []).map((comp) => ({
+            ...comp,
+            price: Number(comp.price) || 0,
+          }))
         }));
     },
     enabled: !!productId
@@ -71,8 +74,8 @@ export default function PriceHistoryChart({ productId, selectedProduct }) {
     );
   }
 
-  const minPrice = Math.min(...priceHistory.map(d => d.our_price));
-  const maxPrice = Math.max(...priceHistory.map(d => d.our_price));
+  const minPrice = Math.min(...priceHistory.map(d => Number(d.our_price) || 0));
+  const maxPrice = Math.max(...priceHistory.map(d => Number(d.our_price) || 0));
   const marginValues = priceHistory
     .map(d => Number(d.margin_pct))
     .filter(v => Number.isFinite(v));
@@ -88,7 +91,7 @@ export default function PriceHistoryChart({ productId, selectedProduct }) {
   const chartData = priceHistory.map(d => {
     const item = {
       date: d.date,
-      our_price: d.our_price,
+      our_price: Number(d.our_price) || 0,
     };
     
     if (showMargin) {

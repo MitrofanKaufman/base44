@@ -14,7 +14,6 @@ export default function Products() {
   const qc = useQueryClient();
   const [search,    setSearch]    = useState('');
   const [editing,   setEditing]   = useState(null);
-  const [creating,  setCreating]  = useState(false);
   const [importing, setImporting] = useState(false);
   const [chartProduct, setChartProduct] = useState(null); // null = all products
 
@@ -51,11 +50,8 @@ export default function Products() {
           <p className="text-sm text-muted-foreground mt-0.5">{products.length} товаров</p>
         </div>
         <div className="flex gap-2">
-          <Button variant="outline" onClick={() => setImporting(true)} className="gap-2 rounded-md">
-            <RefreshCw className="w-4 h-4" /> Импорт с WB
-          </Button>
           <Button
-            onClick={() => setCreating(true)}
+            onClick={() => setImporting(true)}
             className="gap-2 rounded-md shadow-warm-sm"
             disabled={projects.length === 0}
           >
@@ -219,8 +215,8 @@ export default function Products() {
         </div>
       )}
 
-      {(creating || editing) && (
-        <ProductModal product={editing} projects={projects} clients={clients} onClose={() => { setCreating(false); setEditing(null); }} />
+      {editing && (
+        <ProductModal product={editing} projects={projects} clients={clients} onClose={() => setEditing(null)} />
       )}
       {importing && (
         <WbImportModal projects={projects} clients={clients} onClose={() => setImporting(false)} />

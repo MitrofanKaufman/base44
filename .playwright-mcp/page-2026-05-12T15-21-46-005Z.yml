@@ -1,0 +1,558 @@
+- generic [active] [ref=e1]:
+  - generic [ref=e57]:
+    - complementary [ref=e58]:
+      - generic [ref=e59]:
+        - img [ref=e61]
+        - generic [ref=e63]:
+          - text: unit.marketing
+          - paragraph [ref=e64]: Analytics Platform
+      - navigation [ref=e65]:
+        - paragraph [ref=e66]: Навигация
+        - link "Дашборд" [ref=e67] [cursor=pointer]:
+          - /url: /
+          - img [ref=e68]
+          - generic [ref=e73]: Дашборд
+        - link "Клиенты" [ref=e74] [cursor=pointer]:
+          - /url: /clients
+          - img [ref=e75]
+          - generic [ref=e80]: Клиенты
+        - link "Проекты" [ref=e81] [cursor=pointer]:
+          - /url: /projects
+          - img [ref=e82]
+          - generic [ref=e84]: Проекты
+        - link "Товары" [ref=e85] [cursor=pointer]:
+          - /url: /products
+          - img [ref=e86]
+          - generic [ref=e90]: Товары
+        - link "Расчёты" [ref=e91] [cursor=pointer]:
+          - /url: /calculations
+          - img [ref=e92]
+          - generic [ref=e94]: Расчёты
+        - link "Калькулятор" [ref=e95] [cursor=pointer]:
+          - /url: /calculator
+          - img [ref=e96]
+          - generic [ref=e99]: Калькулятор
+        - link "Анализ" [ref=e100] [cursor=pointer]:
+          - /url: /analysis
+          - img [ref=e101]
+          - generic [ref=e103]: Анализ
+      - generic [ref=e105]:
+        - paragraph [ref=e106]: WB Analytics
+        - paragraph [ref=e107]: Версия 1.0 · Demo
+      - button [ref=e109] [cursor=pointer]:
+        - img [ref=e110]
+    - generic [ref=e112]:
+      - banner [ref=e113]:
+        - generic [ref=e115]:
+          - heading "Калькулятор" [level=2] [ref=e116]
+          - paragraph [ref=e117]: Аналитическая платформа юнит-экономики
+        - generic [ref=e118]:
+          - generic [ref=e121]: Wildberries · Live
+          - button "Открыть меню пользователя" [ref=e123] [cursor=pointer]: Q
+      - main [ref=e124]:
+        - generic [ref=e125]:
+          - generic [ref=e126]:
+            - generic [ref=e127]:
+              - heading "Калькулятор юнит-экономики" [level=1] [ref=e128]
+              - paragraph [ref=e129]: Расчёт прибыльности товара на Wildberries · FBO / FBS
+            - generic [ref=e131]:
+              - generic [ref=e132]: "Версии:"
+              - button "Версия 1 0 ₽" [ref=e133] [cursor=pointer]:
+                - img [ref=e134]
+                - generic [ref=e136]: Версия 1
+                - generic [ref=e137]: 0 ₽
+              - button "Сценарий" [ref=e138] [cursor=pointer]:
+                - img [ref=e139]
+                - text: Сценарий
+              - button "Копия" [ref=e140] [cursor=pointer]:
+                - img [ref=e141]
+                - text: Копия
+            - button "Экспорт" [ref=e145] [cursor=pointer]:
+              - img [ref=e146]
+              - text: Экспорт
+              - img [ref=e149]
+          - generic [ref=e151]:
+            - generic [ref=e153]:
+              - img [ref=e154]
+              - generic [ref=e158]: Фото
+            - generic [ref=e159]:
+              - button "Выбрать товар из базы..." [ref=e161] [cursor=pointer]:
+                - img [ref=e162]
+                - generic [ref=e167]: Выбрать товар из базы...
+                - img [ref=e168]
+              - generic [ref=e170]:
+                - generic [ref=e171]:
+                  - generic [ref=e172]:
+                    - generic [ref=e173]: Цена продажи
+                    - generic [ref=e174]:
+                      - spinbutton [ref=e175]: "0"
+                      - generic [ref=e176]: ₽
+                  - generic [ref=e177]:
+                    - generic [ref=e178]: Цена кабинет WB
+                    - generic [ref=e179]:
+                      - spinbutton [ref=e180]: "0"
+                      - generic [ref=e181]: ₽
+                - generic [ref=e183]:
+                  - generic [ref=e184]:
+                    - generic [ref=e185]: План / мес.
+                    - generic [ref=e186]:
+                      - spinbutton [ref=e187]: "0"
+                      - generic [ref=e188]: шт.
+                  - generic [ref=e189]:
+                    - generic [ref=e190]:
+                      - generic [ref=e191]: Длина
+                      - spinbutton [ref=e192]
+                    - generic [ref=e193]:
+                      - generic [ref=e194]: Ширина
+                      - spinbutton [ref=e195]
+                    - generic [ref=e196]:
+                      - generic [ref=e197]: Высота
+                      - spinbutton [ref=e198]
+                    - generic [ref=e199]:
+                      - generic [ref=e200]: Вес кг
+                      - spinbutton [ref=e201]
+                - generic [ref=e203]:
+                  - generic [ref=e204]:
+                    - generic [ref=e205]: Схема
+                    - generic [ref=e206]:
+                      - button "FBO" [ref=e207] [cursor=pointer]
+                      - button "FBS" [ref=e208] [cursor=pointer]
+                  - generic [ref=e209]:
+                    - generic [ref=e210]: Упаковка
+                    - generic [ref=e211]:
+                      - button "Короб" [ref=e212] [cursor=pointer]
+                      - button "Паллет" [ref=e213] [cursor=pointer]
+            - img [ref=e216]:
+              - generic [ref=e222]: 20 см
+              - generic [ref=e223]: 15 см
+              - generic [ref=e224]: 30 см
+          - generic [ref=e226]:
+            - generic [ref=e227]:
+              - generic [ref=e229]:
+                - img [ref=e231]
+                - generic [ref=e234]: Себестоимость
+              - generic [ref=e235]:
+                - generic [ref=e236]:
+                  - generic [ref=e237]: Закупочная цена
+                  - generic [ref=e238]:
+                    - spinbutton [ref=e239]: "0"
+                    - generic [ref=e240]: ₽
+                - generic [ref=e241]:
+                  - generic [ref=e242]: Упаковка
+                  - generic [ref=e243]:
+                    - spinbutton [ref=e244]: "0"
+                    - generic [ref=e245]: ₽
+                - generic [ref=e246]:
+                  - generic [ref=e247]: Фулфилмент / сборка
+                  - generic [ref=e248]:
+                    - spinbutton [ref=e249]: "0"
+                    - generic [ref=e250]: ₽
+                - generic [ref=e251]:
+                  - generic [ref=e252]: Доставка до WB
+                  - generic [ref=e253]:
+                    - spinbutton [ref=e254]: "0"
+                    - generic [ref=e255]: ₽
+                - generic [ref=e256]:
+                  - generic [ref=e257]: Брак
+                  - generic [ref=e258]:
+                    - spinbutton [ref=e259]: "0"
+                    - generic [ref=e260]: "%"
+                - generic [ref=e261]:
+                  - generic [ref=e262]: Прочие расходы
+                  - generic [ref=e263]:
+                    - spinbutton [ref=e264]: "0"
+                    - generic [ref=e265]: ₽
+            - generic [ref=e266]:
+              - generic [ref=e267]:
+                - generic [ref=e268]:
+                  - img [ref=e270]
+                  - generic [ref=e275]: Логистика
+                - button "Выберите товар клиента с WB token" [disabled] [ref=e276]:
+                  - img [ref=e277]
+              - generic [ref=e282]:
+                - generic [ref=e283]:
+                  - generic [ref=e284]:
+                    - button "Москва" [ref=e285] [cursor=pointer]:
+                      - generic [ref=e286]:
+                        - img [ref=e287]
+                        - generic [ref=e290]: Москва
+                      - img [ref=e291]
+                    - generic [ref=e293]:
+                      - paragraph [ref=e294]: Москва • FBO
+                      - generic [ref=e295]:
+                        - generic [ref=e296]:
+                          - text: "Базовый:"
+                          - strong [ref=e297]: 45₽
+                        - generic [ref=e298]:
+                          - text: "За кг:"
+                          - strong [ref=e299]: 1.5₽
+                        - generic [ref=e300]:
+                          - text: "Хранение:"
+                          - strong [ref=e301]: 8₽/дн
+                  - generic [ref=e302]: ПВЗ не найдены
+                - generic [ref=e303]:
+                  - generic [ref=e304]: Логистика WB FBO
+                  - generic [ref=e305]:
+                    - spinbutton [ref=e306]: "0"
+                    - generic [ref=e307]: ₽
+                - generic [ref=e308]:
+                  - generic [ref=e309]: Хранение FBO
+                  - generic [ref=e310]:
+                    - spinbutton [ref=e311]: "0"
+                    - generic [ref=e312]: ₽
+                - generic [ref=e313]:
+                  - generic [ref=e314]: Прочее FBO
+                  - generic [ref=e315]:
+                    - spinbutton [ref=e316]: "0"
+                    - generic [ref=e317]: ₽
+            - generic [ref=e318]:
+              - generic [ref=e320]:
+                - img [ref=e322]
+                - generic [ref=e325]: Маркетинг
+              - generic [ref=e326]:
+                - generic [ref=e327]:
+                  - generic [ref=e328]: Доля платного трафика
+                  - generic [ref=e329]:
+                    - spinbutton [ref=e330]: "0"
+                    - generic [ref=e331]: "%"
+                - generic [ref=e332]:
+                  - generic [ref=e333]: CAC / платный заказ
+                  - generic [ref=e334]:
+                    - spinbutton [ref=e335]: "0"
+                    - generic [ref=e336]: ₽
+                - generic [ref=e337]:
+                  - generic [ref=e338]: Промо / акции
+                  - generic [ref=e339]:
+                    - spinbutton [ref=e340]: "0"
+                    - generic [ref=e341]: "%"
+                - generic [ref=e342]:
+                  - generic [ref=e343]: Пост. расходы / мес.
+                  - generic [ref=e344]:
+                    - spinbutton [ref=e345]: "0"
+                    - generic [ref=e346]: ₽
+            - generic [ref=e347]:
+              - generic [ref=e348]:
+                - generic [ref=e349]:
+                  - img [ref=e351]
+                  - generic [ref=e354]: Налоги и комиссии
+                - button "Выберите товар клиента с WB token" [disabled] [ref=e355]:
+                  - img [ref=e356]
+              - generic [ref=e361]:
+                - generic [ref=e362]:
+                  - generic [ref=e363]: Система налогообложения
+                  - generic [ref=e364]:
+                    - button "УСН Доходы % от выручки" [ref=e365] [cursor=pointer]:
+                      - generic [ref=e367]:
+                        - paragraph [ref=e368]: УСН Доходы
+                        - paragraph [ref=e369]: "% от выручки"
+                    - button "УСН Доходы−Расходы % от прибыли" [ref=e370] [cursor=pointer]:
+                      - generic [ref=e372]:
+                        - paragraph [ref=e373]: УСН Доходы−Расходы
+                        - paragraph [ref=e374]: "% от прибыли"
+                - generic [ref=e375]:
+                  - generic [ref=e376]: Ставка налога
+                  - generic [ref=e377]:
+                    - spinbutton [ref=e378]: "6"
+                    - generic [ref=e379]: "%"
+                - generic [ref=e380]:
+                  - generic [ref=e381]: Эквайринг
+                  - generic [ref=e382]:
+                    - spinbutton [ref=e383]: "1.5"
+                    - generic [ref=e384]: "%"
+                - generic [ref=e385]:
+                  - generic [ref=e386]: Комиссия WB
+                  - generic [ref=e387]:
+                    - spinbutton [ref=e388]: "15"
+                    - generic [ref=e389]: "%"
+                - generic [ref=e390]:
+                  - generic [ref=e391]: Возвраты
+                  - generic [ref=e392]:
+                    - spinbutton [ref=e393]: "5"
+                    - generic [ref=e394]: "%"
+                - generic [ref=e395]:
+                  - generic [ref=e396]: Потеря на возврате
+                  - generic [ref=e397]:
+                    - spinbutton [ref=e398]: "0"
+                    - generic [ref=e399]: ₽
+          - generic [ref=e400]:
+            - generic [ref=e401]:
+              - generic [ref=e402]:
+                - generic [ref=e403]:
+                  - img [ref=e404]
+                  - generic [ref=e407]: Финансовая расшифровка
+                - generic [ref=e408]:
+                  - generic [ref=e409]: Выручка в месяц
+                  - generic [ref=e410]: —
+                - generic [ref=e411]:
+                  - generic [ref=e412]: Чистая выручка (за ед.)
+                  - generic [ref=e413]: 0 ₽
+                - generic [ref=e414]:
+                  - generic [ref=e415]: Себестоимость
+                  - generic [ref=e416]: 0 ₽
+                - generic [ref=e417]:
+                  - generic [ref=e418]: Валовая прибыль
+                  - generic [ref=e419]: 0 ₽
+                - generic [ref=e420]:
+                  - generic [ref=e421]: Contribution margin
+                  - generic [ref=e422]: 0 ₽
+                - generic [ref=e423]:
+                  - generic [ref=e424]: Прибыль в месяц
+                  - generic [ref=e425]: —
+              - generic [ref=e426]:
+                - generic [ref=e427]:
+                  - img [ref=e428]
+                  - generic [ref=e431]: Ключевые метрики
+                - generic [ref=e432]:
+                  - generic [ref=e433]: Валовая прибыль
+                  - generic [ref=e434]: 0 ₽
+                - generic [ref=e435]:
+                  - generic [ref=e436]: Contribution margin
+                  - generic [ref=e437]: 0 ₽
+                - generic [ref=e438]:
+                  - generic [ref=e439]: Маржинальность
+                  - generic [ref=e440]: 0.0%
+                - generic [ref=e441]:
+                  - generic [ref=e442]: Операционная прибыль / мес.
+                  - generic [ref=e443]: —
+                - generic [ref=e444]:
+                  - generic [ref=e445]: Рентабельность
+                  - generic [ref=e446]: 0.0%
+                - generic [ref=e447]:
+                  - generic [ref=e448]: ROMI маркетинга
+                  - generic [ref=e449]: —
+              - generic [ref=e450]:
+                - generic [ref=e451]:
+                  - generic [ref=e452]:
+                    - img [ref=e453]
+                    - generic [ref=e457]: Точка безубыточности
+                  - paragraph [ref=e458]: ∞
+                  - paragraph [ref=e459]: модель убыточна
+                - generic [ref=e460]:
+                  - generic [ref=e461]: Запас прочности
+                  - generic [ref=e462]: —
+                - generic [ref=e463]:
+                  - generic [ref=e464]: CAC
+                  - generic [ref=e465]: 0 ₽
+                - generic [ref=e466]:
+                  - generic [ref=e467]: Доля маркетинга
+                  - generic [ref=e468]: —
+            - generic [ref=e469]:
+              - generic [ref=e470]:
+                - generic [ref=e471]:
+                  - img [ref=e472]
+                  - generic [ref=e475]: Структура затрат
+                - generic [ref=e476]: Введите данные для отображения диаграммы
+              - generic [ref=e477]:
+                - generic [ref=e478]:
+                  - img [ref=e479]
+                  - generic [ref=e482]: Соотношение себестоимости, комиссий и прибыли
+                - generic [ref=e483]: Введите данные для отображения диаграммы
+              - generic [ref=e484]:
+                - generic [ref=e485]:
+                  - img [ref=e487]
+                  - heading "Юнит-экономика" [level=3] [ref=e490]
+                  - generic [ref=e491]: ✗ Убыточно
+                - generic [ref=e492]:
+                  - generic [ref=e493]:
+                    - generic [ref=e494]: Цена продажи
+                    - generic [ref=e495]:
+                      - generic [ref=e496]: "0"
+                      - generic [ref=e497]: ₽
+                    - text: "0"
+                  - generic [ref=e498]:
+                    - generic [ref=e499]: Маржинальность
+                    - generic [ref=e500]:
+                      - generic [ref=e501]: "0.0"
+                      - generic [ref=e502]: "%"
+                    - generic [ref=e503]:
+                      - img [ref=e504]
+                      - generic [ref=e507]: "-1%"
+                  - generic [ref=e508]:
+                    - generic [ref=e509]: Contribution
+                    - generic [ref=e510]:
+                      - generic [ref=e511]: "0"
+                      - generic [ref=e512]: ₽
+                    - text: "0"
+                  - generic [ref=e513]:
+                    - generic [ref=e514]: ROI
+                    - generic [ref=e515]:
+                      - generic [ref=e516]: "0.0"
+                      - generic [ref=e517]: "%"
+                    - text: "0"
+                  - generic [ref=e518]:
+                    - generic [ref=e519]: Себестоимость
+                    - generic [ref=e520]:
+                      - generic [ref=e521]: "0"
+                      - generic [ref=e522]: ₽
+                    - text: "0"
+                  - generic [ref=e523]:
+                    - generic [ref=e524]: Маржа %
+                    - generic [ref=e525]:
+                      - generic [ref=e526]: "0.0"
+                      - generic [ref=e527]: "%"
+                    - text: "0"
+                - generic [ref=e528]:
+                  - generic [ref=e529]:
+                    - generic [ref=e530]: "Точка безубыточности:"
+                    - generic [ref=e531]: Не окупается
+                  - generic [ref=e532]:
+                    - generic [ref=e533]: "Переменные затраты:"
+                    - generic [ref=e534]: 0₽
+                  - generic [ref=e535]:
+                    - generic [ref=e536]: "Валовая прибыль:"
+                    - generic [ref=e537]: 0₽
+          - generic [ref=e540]:
+            - generic [ref=e541]:
+              - paragraph [ref=e542]: Влияние на прибыль
+              - generic [ref=e543]:
+                - button "Цена продажи (₽)" [ref=e544] [cursor=pointer]
+                - button "Бюджет на рекламу (₽)" [ref=e545] [cursor=pointer]
+            - img [ref=e549]:
+              - generic [ref=e554]:
+                - generic [ref=e556]: "0"
+                - generic [ref=e558]: "0"
+                - generic [ref=e560]: "0"
+                - generic [ref=e562]: "0"
+                - generic [ref=e564]: "0"
+                - generic [ref=e566]: "0"
+                - generic [ref=e568]: "0"
+                - generic [ref=e570]: "0"
+                - generic [ref=e572]: "0"
+                - generic [ref=e574]: "0"
+                - generic [ref=e576]: "0"
+                - generic [ref=e578]: "5"
+                - generic [ref=e580]: "10"
+                - generic [ref=e582]: "15"
+                - generic [ref=e584]: "20"
+                - generic [ref=e586]: "25"
+                - generic [ref=e588]: "30"
+                - generic [ref=e590]: "35"
+                - generic [ref=e592]: "40"
+                - generic [ref=e594]: "45"
+                - generic [ref=e596]: "50"
+              - generic [ref=e598]:
+                - generic [ref=e600]: "0"
+                - generic [ref=e602]: "1"
+                - generic [ref=e604]: "2"
+                - generic [ref=e606]: "3"
+                - generic [ref=e608]: "4"
+              - generic [ref=e610]: "Текущая: 0 ₽"
+            - generic [ref=e611]:
+              - paragraph [ref=e612]:
+                - text: 💰
+                - strong [ref=e613]: "Текущая прибыль:"
+                - text: 0 ₽/мес
+              - paragraph [ref=e614]: График показывает, как изменение цена продажи (₽) влияет на прибыль
+          - generic [ref=e617]:
+            - img [ref=e618]
+            - text: Выберите товар для просмотра истории цен
+          - generic [ref=e621]:
+            - generic [ref=e622]:
+              - generic [ref=e623]:
+                - img [ref=e624]
+                - generic [ref=e629]: Анализ цен конкурентов
+              - button "Добавить" [ref=e630] [cursor=pointer]:
+                - img [ref=e631]
+                - text: Добавить
+            - table [ref=e633]:
+              - rowgroup [ref=e634]:
+                - row "Участник Цена, ₽ ∆ к моей Вал. маржа Contribution Contrib % ∆ маржи" [ref=e635]:
+                  - columnheader "Участник" [ref=e636]
+                  - columnheader "Цена, ₽" [ref=e637]
+                  - columnheader "∆ к моей" [ref=e638]
+                  - columnheader "Вал. маржа" [ref=e639]
+                  - columnheader "Contribution" [ref=e640]
+                  - columnheader "Contrib %" [ref=e641]
+                  - columnheader "∆ маржи" [ref=e642]
+                  - columnheader [ref=e643]
+              - rowgroup [ref=e644]:
+                - row "Мой товар — — — — — —" [ref=e645]:
+                  - cell "Мой товар" [ref=e646]:
+                    - generic [ref=e649]: Мой товар
+                  - cell "—" [ref=e650]
+                  - cell "—" [ref=e651]
+                  - cell "—" [ref=e652]
+                  - cell "—" [ref=e653]
+                  - cell "—" [ref=e654]
+                  - cell "—" [ref=e655]
+                  - cell [ref=e656]
+                - row "Конкурент 1 ₽ — — — — —" [ref=e657]:
+                  - cell "Конкурент 1" [ref=e658]:
+                    - textbox [ref=e661]: Конкурент 1
+                  - cell "₽" [ref=e662]:
+                    - generic [ref=e663]:
+                      - spinbutton [ref=e664]
+                      - generic [ref=e665]: ₽
+                  - cell "—" [ref=e666]
+                  - cell "—" [ref=e667]
+                  - cell "—" [ref=e668]
+                  - cell "—" [ref=e669]
+                  - cell "—" [ref=e670]
+                  - cell [ref=e671]:
+                    - button [ref=e672] [cursor=pointer]:
+                      - img [ref=e673]
+                - row "Конкурент 2 ₽ — — — — —" [ref=e676]:
+                  - cell "Конкурент 2" [ref=e677]:
+                    - textbox [ref=e680]: Конкурент 2
+                  - cell "₽" [ref=e681]:
+                    - generic [ref=e682]:
+                      - spinbutton [ref=e683]
+                      - generic [ref=e684]: ₽
+                  - cell "—" [ref=e685]
+                  - cell "—" [ref=e686]
+                  - cell "—" [ref=e687]
+                  - cell "—" [ref=e688]
+                  - cell "—" [ref=e689]
+                  - cell [ref=e690]:
+                    - button [ref=e691] [cursor=pointer]:
+                      - img [ref=e692]
+            - paragraph [ref=e695]: "* Маржинальность конкурентов рассчитывается по вашей структуре затрат. Цены вводите вручную."
+          - generic [ref=e696]:
+            - generic [ref=e697]:
+              - generic [ref=e698]:
+                - img [ref=e699]
+                - generic [ref=e702]: Анализ чувствительности прибыли
+              - generic [ref=e703]:
+                - button "Цена продажи" [ref=e704] [cursor=pointer]
+                - button "Себестоимость" [ref=e705] [cursor=pointer]
+                - button "Логистика WB" [ref=e706] [cursor=pointer]
+                - button "Реклама (ACoS)" [ref=e707] [cursor=pointer]
+            - generic [ref=e709]:
+              - img [ref=e710]:
+                - generic [ref=e714]:
+                  - generic [ref=e716]: 400₽
+                  - generic [ref=e718]: 460₽
+                  - generic [ref=e720]: 520₽
+                  - generic [ref=e722]: 580₽
+                  - generic [ref=e724]: 640₽
+                  - generic [ref=e726]: 700₽
+                  - generic [ref=e728]: 760₽
+                  - generic [ref=e730]: 820₽
+                  - generic [ref=e732]: 880₽
+                  - generic [ref=e734]: 940₽
+                  - generic [ref=e736]: 1000₽
+                  - generic [ref=e738]: 1060₽
+                  - generic [ref=e740]: 1120₽
+                  - generic [ref=e742]: 1180₽
+                  - generic [ref=e744]: 1240₽
+                  - generic [ref=e746]: 1300₽
+                  - generic [ref=e748]: 1360₽
+                  - generic [ref=e750]: 1420₽
+                  - generic [ref=e752]: 1480₽
+                  - generic [ref=e754]: 1540₽
+                  - generic [ref=e756]: 1600₽
+                - generic [ref=e758]:
+                  - generic [ref=e760]: 0₽
+                  - generic [ref=e762]: 350₽
+                  - generic [ref=e764]: 700₽
+                  - generic [ref=e766]: 1к₽
+                  - generic [ref=e768]: 1к₽
+              - list [ref=e774]:
+                - listitem [ref=e775]:
+                  - img [ref=e776]
+                  - text: Contribution margin
+                - listitem [ref=e778]:
+                  - img [ref=e779]
+                  - text: Валовая прибыль
+            - paragraph [ref=e781]: Вертикальная линия — текущее значение · меняйте параметры выше и график обновится мгновенно
+  - generic [ref=e782]: 0₽

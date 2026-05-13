@@ -1,0 +1,33 @@
+- generic [ref=e5] [box=224,220,1152,460]:
+  - generic [ref=e6] [box=224,332,700,236]:
+    - generic [ref=e7] [box=224,332,700,118]:
+      - img [ref=e9] [box=235,379,24,24]
+      - generic [ref=e11] [box=282,332,642,118]:
+        - paragraph [ref=e12] [box=282,332,642,20]: unit.marketing
+        - heading "Рабочее пространство аналитики маркетплейсов" [level=1] [ref=e13] [box=282,360,642,90]
+    - generic [ref=e14] [box=224,482,672,86]:
+      - generic [ref=e15] [box=224,482,216,86]:
+        - img [ref=e16] [box=241,499,20,20]
+        - paragraph [ref=e19] [box=241,531,182,20]: JWT-сессия
+      - generic [ref=e20] [box=452,482,216,86]:
+        - img [ref=e21] [box=469,499,20,20]
+        - paragraph [ref=e24] [box=469,531,182,20]: Роли пользователей
+      - generic [ref=e25] [box=680,482,216,86]:
+        - img [ref=e26] [box=697,499,20,20]
+        - paragraph [ref=e29] [box=697,531,182,20]: Защищенный API
+  - generic [ref=e30] [box=956,220,420,460]:
+    - generic [ref=e31] [box=957,221,418,206]:
+      - generic [ref=e32] [box=981,261,370,80]:
+        - heading "Войти в аккаунт" [level=2] [ref=e33] [box=981,261,370,32]
+        - paragraph [ref=e34] [box=981,301,370,40]: Введите данные пользователя для доступа к приложению.
+      - generic [ref=e35] [box=981,357,370,46]:
+        - button "Вход" [ref=e36] [cursor=pointer] [box=986,362,180,36]
+        - button "Регистрация" [ref=e37] [cursor=pointer] [box=1166,362,180,36]
+    - generic [ref=e39] [box=981,427,370,228]:
+      - generic [ref=e40] [box=981,427,370,76]:
+        - text: Email
+        - generic [ref=e41] [box=981,459,370,44]
+      - generic [ref=e43] [box=981,519,370,76]:
+        - text: Пароль
+        - generic [ref=e44] [box=981,551,370,44]
+      - button "Войти" [ref=e46] [cursor=pointer] [box=981,611,370,44]

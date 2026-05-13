@@ -1,4 +1,5 @@
 import { apiRequest, base44 } from '@/api/base44Client';
+export { extractWbArticleFromInput } from './marketplaceLink';
 
 /**
  * Получить данные товара с маркетплейса
@@ -61,6 +62,15 @@ export async function fetchWbProductPreview(article, options = {}) {
     ? `?query=${encodeURIComponent(options.query)}`
     : '';
   return apiRequest(`/wildberries/products/${encodeURIComponent(normalized)}/preview${query}`);
+}
+
+export async function collectWbProductByArticle(article, payload = {}) {
+  const normalized = String(article || '').trim();
+  if (!normalized) throw new Error('WB article is required');
+  return apiRequest(`/wildberries/products/${encodeURIComponent(normalized)}/collect`, {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  });
 }
 
 export async function enqueueWbProductCollection(payload) {

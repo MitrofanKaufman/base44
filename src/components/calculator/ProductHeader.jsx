@@ -65,27 +65,36 @@ export default function ProductHeader({ products, selectedProduct, onSelect, for
 
       {/* Row 1: Product picker */}
       <div className="relative flex-shrink-0">
-        <button
-          onClick={() => setPickerOpen(o => !o)}
-          className="w-full flex items-center gap-1.5 px-2.5 h-[34px] rounded-xl bg-secondary/50 border border-border text-[11px] font-medium text-muted-foreground hover:text-foreground hover:border-primary/40 transition-all"
-        >
-          <Store className="w-3 h-3 flex-shrink-0 text-primary" />
-          <span className="flex-1 text-left truncate min-w-0">
-            {selectedProduct
-              ? <><span className="text-foreground font-semibold">{selectedProduct.name}</span>{selectedProduct.wb_sku && <span className="ml-1.5 font-mono text-[9px] text-muted-foreground">SKU {selectedProduct.wb_sku}</span>}</>
-              : <span>Выбрать товар из базы...</span>
-            }
-          </span>
+        <div className="w-full flex items-center gap-1.5 px-2.5 h-[34px] rounded-xl bg-secondary/50 border border-border text-[11px] font-medium text-muted-foreground hover:text-foreground hover:border-primary/40 transition-all">
+          <button
+            onClick={() => setPickerOpen(o => !o)}
+            className="flex-1 min-w-0 flex items-center gap-1.5 text-left"
+          >
+            <Store className="w-3 h-3 flex-shrink-0 text-primary" />
+            <span className="flex-1 text-left truncate min-w-0">
+              {selectedProduct
+                ? <><span className="text-foreground font-semibold">{selectedProduct.name}</span>{selectedProduct.wb_sku && <span className="ml-1.5 font-mono text-[9px] text-muted-foreground">SKU {selectedProduct.wb_sku}</span>}</>
+                : <span>Выбрать товар из базы...</span>
+              }
+            </span>
+          </button>
           {selectedProduct && (
             <button
               onClick={e => { e.stopPropagation(); navigator.clipboard?.writeText(selectedProduct.wb_sku || ''); }}
               className="hover:text-primary p-0.5 flex-shrink-0"
+              title="Скопировать SKU"
             >
               <Copy className="w-3 h-3" />
             </button>
           )}
-          <ChevronDown className={cn('w-3 h-3 flex-shrink-0 text-muted-foreground transition-transform', pickerOpen && 'rotate-180')} />
-        </button>
+          <button
+            onClick={() => setPickerOpen(o => !o)}
+            className="p-0.5 flex-shrink-0 text-muted-foreground"
+            title="Открыть список товаров"
+          >
+            <ChevronDown className={cn('w-3 h-3 transition-transform', pickerOpen && 'rotate-180')} />
+          </button>
+        </div>
         {pickerOpen && (
           <ProductPickerDropdown
             products={products}
@@ -111,16 +120,16 @@ export default function ProductHeader({ products, selectedProduct, onSelect, for
       </div>
 
       {/* Row 2: prices | dims | toggles */}
-      <div className="flex-1 flex items-stretch gap-2 min-h-0">
+      <div className="flex-1 flex flex-col md:flex-row items-stretch gap-2 min-h-0">
 
         {/* Zone A: 2 price inputs stacked */}
-        <div className="flex flex-col gap-1.5 justify-center" style={{ width: 130 }}>
+        <div className="flex flex-col gap-1.5 justify-center w-full md:w-[130px]">
           <PriceInput label="Цена продажи"    value={form.price}            onChange={v => setField('price', v)} />
           <PriceInput label="Цена кабинет WB" value={form.wb_cabinet_price} onChange={v => setField('wb_cabinet_price', v)} />
         </div>
 
         {/* Divider */}
-        <div className="w-px bg-border flex-shrink-0 self-stretch" />
+        <div className="hidden md:block w-px bg-border flex-shrink-0 self-stretch" />
 
         {/* Zone B: plan + 4 dim chips */}
         <div className="flex flex-col gap-1.5 flex-1 justify-center min-w-0">
@@ -134,10 +143,10 @@ export default function ProductHeader({ products, selectedProduct, onSelect, for
         </div>
 
         {/* Divider */}
-        <div className="w-px bg-border flex-shrink-0 self-stretch" />
+        <div className="hidden md:block w-px bg-border flex-shrink-0 self-stretch" />
 
         {/* Zone C: toggles */}
-        <div className="flex flex-col gap-1.5 justify-center flex-shrink-0" style={{ width: 130 }}>
+        <div className="flex flex-col gap-1.5 justify-center flex-shrink-0 w-full md:w-[130px]">
           <Seg
             label="Схема"
             options={[{ label: 'FBO', value: 'FBO' }, { label: 'FBS', value: 'FBS' }]}

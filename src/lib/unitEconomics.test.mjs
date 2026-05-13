@@ -7,7 +7,7 @@ import {
   normalizeUnitEconomicsInput,
 } from './unitEconomics.js';
 import { buildCalculationPayload } from './calculationPayload.js';
-import { buildCalculatorSeed } from './calculatorSeed.js';
+import { applyFulfillmentModeSeed, buildCalculatorSeed } from './calculatorSeed.js';
 import {
   buildCalculatorViewModel,
   getLogisticsSensitivityField,
@@ -429,6 +429,46 @@ describe('calculator seed from marketplace snapshots', () => {
 
     assert.equal(seed.fbs_last_mile, 149.9);
     assert.equal(seed.fbs_storage, 5);
+  });
+
+  it('recomputes commission and logistics when fulfillment mode changes manually', () => {
+    const next = applyFulfillmentModeSeed({
+      form: {
+        ...defaultForm,
+        category: 'Дом',
+        fulfillment_mode: 'FBO',
+        weight_kg: 1,
+        size_length_cm: 50,
+        size_width_cm: 50,
+        size_height_cm: 50,
+        logistics_direction: 'moscow',
+      },
+      product: { id: 'product-1', category: 'Дом', wb_commission_pct: 20 },
+      fulfillmentMode: 'FBS',
+      commissionDirectories: [
+        {
+          source: 'wildberries',
+          category_name: 'Дом',
+          commission_pct: 14.5,
+          commission_by_model: { kgvpMarketplace: 14.5, kgvpSupplier: 11.5 },
+        },
+      ],
+      logisticsDirectoriesMap: {
+        wildberries: [
+          {
+            direction_id: 'moscow',
+            tariffs: {
+              FBS: { base: 90, per_kg: 1.5, storage: 5 },
+            },
+          },
+        ],
+      },
+    });
+
+    assert.equal(next.fulfillment_mode, 'FBS');
+    assert.equal(next.wb_commission_pct, 11.5);
+    assert.equal(next.fbs_last_mile, 127.43);
+    assert.equal(next.fbs_storage, 5);
   });
 
   it('falls back to Product commission and defaults when snapshots are empty', () => {

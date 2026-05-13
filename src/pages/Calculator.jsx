@@ -2,7 +2,7 @@ import { useState, useCallback, useEffect, useMemo, useRef } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { base44 } from '@/api/base44Client';
 import { calculate } from '@/lib/unitEconomics';
-import { buildCalculatorSeed } from '@/lib/calculatorSeed';
+import { applyFulfillmentModeSeed, buildCalculatorSeed } from '@/lib/calculatorSeed';
 import { Package } from 'lucide-react';
 import ProductHeader from '@/components/calculator/ProductHeader.jsx';
 import DimensionsBox from '@/components/calculator/DimensionsBox';
@@ -99,10 +99,6 @@ export default function Calculator() {
       i === activeIdx ? { ...v, form: typeof updater === 'function' ? updater(v.form) : updater } : v
     ));
   }, [activeIdx]);
-  const setField = useCallback((k, val) => setForm(prev => ({ ...prev, [k]: val })), [setForm]);
-
-  const result = calculate(form);
-  const versionsWithResult = versions.map(v => ({ ...v, result: calculate(v.form) }));
   const directoriesMap = useMemo(() => {
     const bySource = {};
     logisticsDirectories.forEach(dir => {
@@ -111,6 +107,19 @@ export default function Calculator() {
     });
     return bySource;
   }, [logisticsDirectories]);
+  const setField = useCallback((k, val) => setForm(prev => {
+    if (k !== 'fulfillment_mode') return { ...prev, [k]: val };
+    return applyFulfillmentModeSeed({
+      form: { ...prev, fulfillment_mode: val },
+      product: selectedProduct,
+      fulfillmentMode: val,
+      commissionDirectories,
+      logisticsDirectoriesMap: directoriesMap,
+    });
+  }), [setForm, selectedProduct, commissionDirectories, directoriesMap]);
+
+  const result = calculate(form);
+  const versionsWithResult = versions.map(v => ({ ...v, result: calculate(v.form) }));
   const selectedClientId = selectedProduct?.client_id
     || projects.find(p => p.id === selectedProduct?.project_id)?.client_id;
   const selectedProject = projects.find(p => p.id === selectedProduct?.project_id);
@@ -194,12 +203,12 @@ export default function Calculator() {
     <div className="p-3 lg:p-4 max-w-[1600px] mx-auto flex flex-col">
 
       {/* ── Строка заголовка ── */}
-      <div className="flex items-center gap-3 flex-wrap flex-shrink-0" style={{ marginBottom: '12px' }}>
-        <div>
+      <div className="grid grid-cols-1 lg:grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-3 flex-shrink-0" style={{ marginBottom: '12px' }}>
+        <div className="min-w-0">
           <h1 className="text-[17px] font-semibold tracking-tight text-foreground leading-tight">Калькулятор юнит-экономики</h1>
           <p className="text-[11px] text-muted-foreground">Расчёт прибыльности товара на Wildberries · FBO / FBS</p>
         </div>
-        <div className="flex-1 min-w-0 bg-card rounded-lg border border-border shadow-warm-sm px-3 py-2 overflow-x-auto">
+        <div className="min-w-0 bg-card rounded-lg border border-border shadow-warm-sm px-3 py-2 overflow-x-auto">
           <VersionsPanel
             versions={versionsWithResult}
             activeIdx={activeIdx}
@@ -213,10 +222,10 @@ export default function Calculator() {
       </div>
 
       {/* ── Ряд 1: Фото | Параметры товара | Габариты ── */}
-      <div style={{ display: 'grid', gridTemplateColumns: '160px minmax(0,1fr) 180px', gap: '12px', height: '160px', marginBottom: '12px', flexShrink: 0 }}>
+      <div className="grid grid-cols-1 lg:grid-cols-[160px_minmax(0,1fr)_180px] gap-3 lg:h-[160px] mb-3 flex-shrink-0">
 
         {/* Фото товара */}
-        <div className="bg-card rounded-[18px] border border-border shadow-warm-sm flex flex-col items-center justify-center overflow-hidden gap-2 p-2">
+        <div className="bg-card rounded-[18px] border border-border shadow-warm-sm flex flex-col items-center justify-center overflow-hidden gap-2 p-2 min-h-[150px] lg:min-h-0">
           {selectedProduct?.image_url ? (
             <img src={selectedProduct.image_url} alt={selectedProduct.name} className="w-full h-[100px] object-contain" />
           ) : (
@@ -230,6 +239,9 @@ export default function Calculator() {
               productId={selectedProduct.id}
               selectedProduct={selectedProduct}
               onDataUpdate={(data) => {
+                if (data.product?.id) {
+                  setSelectedProduct(prev => prev?.id === data.product.id ? { ...prev, ...data.product } : prev);
+                }
                 if (data.price !== undefined && data.price !== null) setField('price', data.price);
                 if (data.wb_commission_pct !== undefined && data.wb_commission_pct !== null) setField('wb_commission_pct', data.wb_commission_pct);
               }}

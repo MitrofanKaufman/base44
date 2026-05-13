@@ -1,9 +1,12 @@
 import { randomUUID } from 'node:crypto';
+import { execFile } from 'node:child_process';
+import { promisify } from 'node:util';
 
 const WB_BASE_URL = 'https://www.wildberries.ru';
 const WB_CARDS_DETAIL_URL = 'https://card.wb.ru/cards/v4/detail';
 const WB_SEARCH_URL = 'https://search.wb.ru/exactmatch/ru/common/v18/search';
 const DEFAULT_TIMEOUT_MS = 15_000;
+const execFileAsync = promisify(execFile);
 
 const PRODUCT_DIMENSION_ALIASES = {
   length: ['длина товара', 'длина', 'длина предмета', 'глубина товара', 'глубина', 'глубина предмета'],
@@ -222,6 +225,63 @@ export function buildWbHeaders(referer) {
   };
 }
 
+const fetchJsonViaWget = async (url, options = {}) => {
+  const startedAt = Date.now();
+  const timeoutMs = Number(options.timeoutMs || process.env.WB_FETCH_TIMEOUT_MS || DEFAULT_TIMEOUT_MS);
+  const timeoutSec = Math.max(1, Math.ceil(timeoutMs / 1000));
+  const headers = options.headers || {};
+  const args = [
+    '-qO-',
+    '--tries=1',
+    `--timeout=${timeoutSec}`,
+    ...Object.entries(headers).map(([key, value]) => `--header=${key}: ${value}`),
+    url,
+  ];
+
+  try {
+    const { stdout } = await execFileAsync('wget', args, {
+      timeout: Math.max(1_000, timeoutMs + 1_000),
+      maxBuffer: Number(process.env.WB_WGET_MAX_BUFFER || 10 * 1024 * 1024),
+    });
+    const finishedAt = Date.now();
+    try {
+      return {
+        ok: true,
+        status: 200,
+        url,
+        startedAt,
+        finishedAt,
+        durationMs: finishedAt - startedAt,
+        json: stdout ? JSON.parse(stdout) : undefined,
+        transport: 'wget',
+      };
+    } catch (error) {
+      return {
+        ok: false,
+        status: 0,
+        url,
+        startedAt,
+        finishedAt,
+        durationMs: finishedAt - startedAt,
+        error: `Invalid JSON from wget: ${error.message}`,
+        transport: 'wget',
+      };
+    }
+  } catch (error) {
+    const finishedAt = Date.now();
+    return {
+      ok: false,
+      status: 0,
+      url,
+      startedAt,
+      finishedAt,
+      durationMs: finishedAt - startedAt,
+      error: error.code === 'ENOENT' ? 'wget is not available' : error.message,
+      transport: 'wget',
+    };
+  }
+};
+
 const fetchJson = async (url, options = {}) => {
   const startedAt = Date.now();
   const ctrl = new AbortController();
@@ -244,6 +304,16 @@ const fetchJson = async (url, options = {}) => {
     };
 
     if (!response.ok) {
+      if (options.wgetFallback && [403, 429].includes(response.status)) {
+        const fallback = await fetchJsonViaWget(url, { headers: options.headers, timeoutMs });
+        if (fallback.ok) {
+          return {
+            ...fallback,
+            fetchStatus: response.status,
+            fetchError: `${response.status} ${response.statusText}`,
+          };
+        }
+      }
       return { ...base, error: `${response.status} ${response.statusText}` };
     }
 
@@ -367,6 +437,7 @@ export async function fetchCardsDetail(article, options = {}) {
   const result = await fetchJson(url.toString(), {
     headers: buildWbHeaders(buildProductUrl(normalized)),
     timeoutMs: options.timeoutMs,
+    wgetFallback: true,
   });
   const payload = asRecord(result.json);
   const product = toArray(payload.products)[0] || toArray(asRecord(payload.data).products)[0];

@@ -146,3 +146,51 @@ export function buildCalculatorSeed({
 
   return next;
 }
+
+/**
+ * @param {{
+ *   form?: Record<string, any>,
+ *   product?: Record<string, any> | null,
+ *   fulfillmentMode?: string,
+ *   commissionDirectories?: Array<Record<string, any>>,
+ *   logisticsDirectoriesMap?: Record<string, any>,
+ * }} [options]
+ * @returns {Record<string, any>}
+ */
+export function applyFulfillmentModeSeed({
+  form = {},
+  product = null,
+  fulfillmentMode = 'FBO',
+  commissionDirectories = [],
+  logisticsDirectoriesMap = {},
+} = {}) {
+  const category = firstValue(form.category, product?.category, product?.category_name);
+  const productForCalc = {
+    ...(product || {}),
+    ...form,
+    category,
+    fulfillment_mode: fulfillmentMode,
+  };
+  /** @type {Record<string, any>} */
+  const next = {
+    ...form,
+    fulfillment_mode: fulfillmentMode,
+    wb_commission_pct: resolveWbCommission(productForCalc, fulfillmentMode, commissionDirectories),
+  };
+  const logistics = calculateLogisticsCost(
+    productForCalc,
+    fulfillmentMode,
+    next.logistics_direction || 'moscow',
+    logisticsDirectoriesMap,
+  );
+
+  if (fulfillmentMode === 'FBS') {
+    next.fbs_last_mile = logistics.total;
+    next.fbs_storage = logistics.storage;
+  } else {
+    next.fbo_wb_logistics = logistics.total;
+    next.fbo_storage = logistics.storage;
+  }
+
+  return next;
+}
