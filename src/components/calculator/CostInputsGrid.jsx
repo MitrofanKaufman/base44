@@ -1,9 +1,11 @@
+import { useCallback, useEffect, useState } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { Box, Truck, Megaphone, ShieldCheck, RefreshCw } from 'lucide-react';
+import { Box, ChevronDown, Megaphone, Minus, RefreshCw, ShieldCheck, Truck } from 'lucide-react';
 import LogisticsDirectionSelector from './LogisticsDirectionSelector';
 import PickupPointSelector from './PickupPointSelector';
 import { calculateLogisticsCost, clearTariffCache, getTariffs } from '@/lib/LogisticsService';
 import { syncLogisticsDirectory, syncWbCommissionDirectory } from '@/lib/MarketplaceAPI';
+import { cn } from '@/lib/utils';
 
 const TAX_SYSTEMS = [
   { value: 'usn_income',         label: 'УСН Доходы',         hint: '% от выручки' },
@@ -11,6 +13,22 @@ const TAX_SYSTEMS = [
 ];
 
 const DEFAULT_TAX_PCT = { usn_income: 6, usn_income_expense: 15 };
+const COLLAPSED_STORAGE_KEY = 'base44:calculator:cost-input-sections:v1';
+const SECTION_IDS = ['costs', 'logistics', 'marketing', 'taxes'];
+
+function readCollapsedSections() {
+  if (typeof window === 'undefined') return {};
+
+  try {
+    const parsed = JSON.parse(window.localStorage.getItem(COLLAPSED_STORAGE_KEY) || '{}');
+    return SECTION_IDS.reduce((acc, id) => {
+      acc[id] = Boolean(parsed[id]);
+      return acc;
+    }, {});
+  } catch (_error) {
+    return {};
+  }
+}
 
 const NumField = ({ label, value, onChange, suffix = '₽', step = '1' }) => (
   <div className="flex items-center justify-between py-[5px] gap-2 border-b border-border/40 last:border-0">
@@ -30,23 +48,35 @@ const NumField = ({ label, value, onChange, suffix = '₽', step = '1' }) => (
   </div>
 );
 
-const Section = ({ icon: IconComp, title, color, action = null, children }) => (
-  <div className="bg-card rounded-[18px] border border-border shadow-warm-sm p-4 flex flex-col min-w-0 h-fit">
-    <div className="flex items-center justify-between gap-2 mb-3">
+const Section = ({ id, icon: IconComp, title, color, action = null, collapsed, onToggle, className, children }) => (
+  <section className={cn('bg-card rounded-[18px] border border-border shadow-warm-sm p-4 flex flex-col min-w-0 h-fit', className)}>
+    <div className={cn('flex items-center justify-between gap-2', !collapsed && 'mb-3')}>
       <div className="flex items-center gap-1.5 min-w-0">
         <div className={`w-5 h-5 rounded-md flex items-center justify-center flex-shrink-0 ${color}`}>
           <IconComp className="w-3 h-3" />
         </div>
         <span className="text-[10px] font-bold uppercase tracking-widest text-foreground truncate">{title}</span>
       </div>
-      {action}
+      <div className="flex items-center gap-1 flex-shrink-0">
+        {action}
+        <button
+          type="button"
+          onClick={() => onToggle(id)}
+          title={collapsed ? `Развернуть блок «${title}»` : `Свернуть блок «${title}»`}
+          aria-label={collapsed ? `Развернуть блок ${title}` : `Свернуть блок ${title}`}
+          className="w-7 h-7 rounded-md border border-border bg-secondary/40 text-muted-foreground hover:text-foreground hover:bg-secondary transition-colors flex items-center justify-center"
+        >
+          {collapsed ? <ChevronDown className="w-3.5 h-3.5" /> : <Minus className="w-3.5 h-3.5" />}
+        </button>
+      </div>
     </div>
-    <div className="space-y-0">{children}</div>
-  </div>
+    {!collapsed && <div className="space-y-0">{children}</div>}
+  </section>
 );
 
 export default function CostInputsGrid({ form, setField, selectedProduct = null, selectedClientId = null, directoriesMap = null }) {
   const qc = useQueryClient();
+  const [collapsedSections, setCollapsedSections] = useState(readCollapsedSections);
   const effectiveDirectoriesMap = directoriesMap || {};
   const isFBS = form.fulfillment_mode === 'FBS';
   const syncMutation = useMutation({
@@ -66,6 +96,23 @@ export default function CostInputsGrid({ form, setField, selectedProduct = null,
   const handleDirectionChange = (dirId) => {
     setField('logistics_direction', dirId);
   };
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+
+    try {
+      window.localStorage.setItem(COLLAPSED_STORAGE_KEY, JSON.stringify(collapsedSections));
+    } catch (_error) {
+      // Состояние сворачивания не должно мешать работе калькулятора.
+    }
+  }, [collapsedSections]);
+
+  const toggleSection = useCallback((id) => {
+    setCollapsedSections(current => ({
+      ...current,
+      [id]: !current[id],
+    }));
+  }, []);
 
   const handleTariffsLoad = (tariffs, dirId) => {
     // Используем полный расчет логистики если есть товар
@@ -100,10 +147,18 @@ export default function CostInputsGrid({ form, setField, selectedProduct = null,
 
   // Автоматически обновляем комиссию WB при смене товара
   return (
-    <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-3 items-start">
+    <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3 items-start">
 
       {/* СЕБЕСТОИМОСТЬ */}
-      <Section icon={Box} title="Себестоимость" color="bg-orange-100 text-orange-600">
+      <Section
+        id="costs"
+        icon={Box}
+        title="Себестоимость"
+        color="bg-orange-100 text-orange-600"
+        collapsed={collapsedSections.costs}
+        onToggle={toggleSection}
+        className="xl:col-span-2"
+      >
         <NumField label="Закупочная цена"     value={form.cogs_purchase}    onChange={v => setField('cogs_purchase', v)} />
         <NumField label="Упаковка"            value={form.cogs_packaging}   onChange={v => setField('cogs_packaging', v)} />
         <NumField label="Фулфилмент / сборка" value={form.cogs_fulfillment} onChange={v => setField('cogs_fulfillment', v)} />
@@ -114,9 +169,12 @@ export default function CostInputsGrid({ form, setField, selectedProduct = null,
 
       {/* ЛОГИСТИКА */}
       <Section
+        id="logistics"
         icon={Truck}
         title="Логистика"
         color="bg-blue-100 text-blue-600"
+        collapsed={collapsedSections.logistics}
+        onToggle={toggleSection}
         action={(
           <button
             type="button"
@@ -176,7 +234,14 @@ export default function CostInputsGrid({ form, setField, selectedProduct = null,
       </Section>
 
       {/* МАРКЕТИНГ */}
-      <Section icon={Megaphone} title="Маркетинг" color="bg-purple-100 text-purple-600">
+      <Section
+        id="marketing"
+        icon={Megaphone}
+        title="Маркетинг"
+        color="bg-purple-100 text-purple-600"
+        collapsed={collapsedSections.marketing}
+        onToggle={toggleSection}
+      >
         <NumField label="Доля платного трафика" value={form.paid_share_pct} onChange={v => setField('paid_share_pct', v)} suffix="%" step="0.1" />
         <NumField label="CAC / платный заказ"   value={form.cac}            onChange={v => setField('cac', v)} />
         <NumField label="Промо / акции"         value={form.promo_pct}      onChange={v => setField('promo_pct', v)}      suffix="%" step="0.1" />
@@ -185,9 +250,13 @@ export default function CostInputsGrid({ form, setField, selectedProduct = null,
 
       {/* НАЛОГИ И КОМИССИИ */}
       <Section
+        id="taxes"
         icon={ShieldCheck}
         title="Налоги и комиссии"
         color="bg-emerald-100 text-emerald-600"
+        collapsed={collapsedSections.taxes}
+        onToggle={toggleSection}
+        className="xl:col-span-2"
         action={(
           <button
             type="button"
