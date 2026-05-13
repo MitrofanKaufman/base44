@@ -84,7 +84,7 @@ export default function Admin() {
       {/* Content */}
       <div className="max-w-[1600px] mx-auto p-4">
         {!activeTab && <AdminHomepage onSelectSection={setActiveTab} />}
-        {activeTab === 'overview' && <AdminOverview />}
+        {activeTab === 'overview' && <AdminOverview onSelectSection={setActiveTab} />}
         {activeTab === 'wb-sync' && (
           <div className="max-w-xl">
             <SyncStatusWidget />
