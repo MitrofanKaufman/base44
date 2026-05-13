@@ -6,6 +6,7 @@ const DEFAULT_ACTIVITY_SESSION_ID = 'default-session';
 const BROADCAST_AUDIENCES = new Set(['all', 'active_subscribers', 'paid_accounts', 'admins']);
 const BROADCAST_CADENCES = new Set(['once', 'daily', 'weekly', 'subscription_expiring']);
 const BROADCAST_CATEGORIES = new Set(['notification', 'reminder', 'system', 'billing']);
+const POSTGRES_BIGINT_MAX = 9_223_372_036_854_775_807;
 
 let previousCpuSample;
 
@@ -39,7 +40,7 @@ function constrainedMemoryBytes() {
   try {
     if (typeof process.constrainedMemory === 'function') {
       const bytes = Number(process.constrainedMemory());
-      if (Number.isFinite(bytes) && bytes > 0) return bytes;
+      if (Number.isFinite(bytes) && bytes > 0 && bytes < POSTGRES_BIGINT_MAX) return bytes;
     }
   } catch {
     // Ignore unsupported runtime probes.

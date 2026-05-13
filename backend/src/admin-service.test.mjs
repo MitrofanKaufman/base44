@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import {
+  collectProcessLoad,
   getAdminMetrics,
   getBroadcastRecipients,
   recordUserActivity,
@@ -114,4 +115,16 @@ test('getBroadcastRecipients honors explicit email filters before audience filte
   assert.deepEqual(recipients, ['admin@example.test']);
   assert.match(queries[0].sql, /lower\(email\) = ANY/);
   assert.deepEqual(queries[0].values, [['admin@example.test']]);
+});
+
+test('collectProcessLoad does not expose unsigned sentinel memory limits', () => {
+  const original = process.constrainedMemory;
+  process.constrainedMemory = () => 18_446_744_073_709_552_000;
+  try {
+    const load = collectProcessLoad();
+    assert.ok(load.memoryLimitBytes > 0);
+    assert.ok(load.memoryLimitBytes < 9_223_372_036_854_775_807);
+  } finally {
+    process.constrainedMemory = original;
+  }
 });
