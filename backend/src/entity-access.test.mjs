@@ -29,6 +29,29 @@ describe('entity access scoping', () => {
     assert.deepEqual(where.values, ['active']);
   });
 
+  it('lets non-admin users read public directory records', () => {
+    const where = buildWhere(
+      { source: 'wildberries' },
+      entityDefinitions.LogisticsDirectory,
+      { email: 'owner@example.test', role: 'user' },
+    );
+
+    assert.equal(where.sql, 'WHERE source = $1 AND (created_by = $2 OR created_by = $3 OR created_by IS NULL)');
+    assert.deepEqual(where.values, ['wildberries', 'owner@example.test', 'system']);
+  });
+
+  it('keeps public directory records owner-only for write scopes', () => {
+    const where = buildWhere(
+      { source: 'wildberries' },
+      entityDefinitions.LogisticsDirectory,
+      { email: 'owner@example.test', role: 'user' },
+      { includePublic: false },
+    );
+
+    assert.equal(where.sql, 'WHERE source = $1 AND created_by = $2');
+    assert.deepEqual(where.values, ['wildberries', 'owner@example.test']);
+  });
+
   it('rejects references to records owned by another user', async () => {
     const calls = [];
     const pool = {

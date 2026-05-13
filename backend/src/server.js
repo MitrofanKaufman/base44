@@ -149,7 +149,7 @@ const registerEntity = (name, def) => {
     await assertOwnedReferences(pool, req.auth, updateData);
     const setValues = entries.map(([k, v]) => toDbValue(def, k, v));
     const sets = entries.map(([k], i) => `${toDbField(def, k)} = $${i + 1}`);
-    const where = buildWhere(queryFilter, def, req.auth);
+    const where = buildWhere(queryFilter, def, req.auth, { includePublic: false });
     const whereShifted = where.sql.replace(/\$(\d+)/g, (_m, n) => `$${Number(n) + setValues.length}`);
     const sql = `UPDATE ${def.table} SET ${sets.join(', ')}, updated_date = now() ${whereShifted} RETURNING *`;
     const result = await pool.query(sql, [...setValues, ...where.values]);
@@ -158,7 +158,7 @@ const registerEntity = (name, def) => {
 
   app.delete(base, ...entityAuth, route(async (req, res) => {
     const bodyFilter = req.body || {};
-    const where = buildWhere(bodyFilter, def, req.auth);
+    const where = buildWhere(bodyFilter, def, req.auth, { includePublic: false });
     if (!where.filterCount) return res.status(400).json({ error: 'empty filter is not allowed' });
     const result = await pool.query(`DELETE FROM ${def.table} ${where.sql}`, where.values);
     res.json({ deleted: result.rowCount });
@@ -178,7 +178,7 @@ const registerEntity = (name, def) => {
     await assertOwnedReferences(pool, req.auth, data);
     const sets = entries.map(([k], i) => `${toDbField(def, k)} = $${i + 1}`);
     const vals = entries.map(([k, v]) => toDbValue(def, k, v));
-    const where = buildWhere({ id: req.params.id }, def, req.auth);
+    const where = buildWhere({ id: req.params.id }, def, req.auth, { includePublic: false });
     const whereShifted = where.sql.replace(/\$(\d+)/g, (_m, n) => `$${Number(n) + vals.length}`);
     const query = `UPDATE ${def.table} SET ${sets.join(', ')}, updated_date = now() ${whereShifted} RETURNING *`;
     const result = await pool.query(query, [...vals, ...where.values]);
@@ -187,7 +187,7 @@ const registerEntity = (name, def) => {
   }));
 
   app.delete(`${base}/:id`, ...entityAuth, route(async (req, res) => {
-    const where = buildWhere({ id: req.params.id }, def, req.auth);
+    const where = buildWhere({ id: req.params.id }, def, req.auth, { includePublic: false });
     await pool.query(`DELETE FROM ${def.table} ${where.sql}`, where.values);
     res.sendStatus(204);
   }));

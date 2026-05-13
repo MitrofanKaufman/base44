@@ -123,25 +123,18 @@ export async function syncLogisticsDirectory(marketplace = 'wildberries', option
   }
 
   const clientId = options.clientId;
-  if (!clientId) {
-    throw new Error('Для синхронизации ПВЗ нужен клиент с WB Seller API token');
-  }
-
-  const response = await apiRequest(
-    `/wildberries/clients/${encodeURIComponent(clientId)}/logistics-directions/sync`,
-    { method: 'POST' },
-  );
+  const path = clientId
+    ? `/wildberries/clients/${encodeURIComponent(clientId)}/logistics-directions/sync`
+    : '/wildberries/directories/logistics/sync';
+  const response = await apiRequest(path, { method: 'POST' });
 
   return response.directions || [];
 }
 
 export async function syncWbCommissionDirectory(clientId) {
-  if (!clientId) {
-    throw new Error('Для синхронизации комиссий нужен клиент с WB Seller API token');
-  }
-  const response = await apiRequest(
-    `/wildberries/clients/${encodeURIComponent(clientId)}/commission-directory/sync`,
-    { method: 'POST' },
-  );
+  const path = clientId
+    ? `/wildberries/clients/${encodeURIComponent(clientId)}/commission-directory/sync`
+    : '/wildberries/directories/commission/sync';
+  const response = await apiRequest(path, { method: 'POST' });
   return response.items || [];
 }

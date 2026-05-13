@@ -22,6 +22,7 @@ import { Card } from '@/components/ui/card';
 import { Progress } from '@/components/ui/progress';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import AdminDashboardGrid from '@/components/admin/AdminDashboardGrid';
 import { getAdminMetrics } from '@/lib/adminApi';
 import { cn } from '@/lib/utils';
 
@@ -112,6 +113,7 @@ const StatTile = ({
   progress = undefined,
   onClick = undefined,
   to = undefined,
+  className = '',
 }) => {
   const body = (
     <>
@@ -139,24 +141,25 @@ const StatTile = ({
     </>
   );
 
-  const className = cn(
+  const tileClassName = cn(
     'rounded-lg border border-border/70 bg-card/70 p-4 text-left transition-colors',
     (onClick || to) && 'hover:border-primary/50 hover:bg-primary/5',
+    className,
   );
 
   if (to) {
-    return <Link to={to} className={className}>{body}</Link>;
+    return <Link to={to} className={tileClassName}>{body}</Link>;
   }
 
   if (onClick) {
     return (
-      <button type="button" onClick={onClick} className={className}>
+      <button type="button" onClick={onClick} className={tileClassName}>
         {body}
       </button>
     );
   }
 
-  return <div className={className}>{body}</div>;
+  return <div className={tileClassName}>{body}</div>;
 };
 
 const DetailRow = ({ label, value, tone = 'default' }) => (
@@ -212,22 +215,12 @@ export default function AdminOverview({ onSelectSection = noopSelectSection }) {
   const cpuTone = system.cpuLoadPct > 80 ? 'danger' : system.cpuLoadPct > 60 ? 'warning' : 'blue';
   const memoryTone = system.memoryLoadPct > 80 ? 'danger' : system.memoryLoadPct > 60 ? 'warning' : 'success';
 
-  return (
-    <div className="space-y-6">
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <h2 className="text-lg font-bold text-foreground">Операционный обзор</h2>
-          <p className="text-sm text-muted-foreground">
-            Последнее обновление: {formatDate(metrics?.sampledAt)}
-          </p>
-        </div>
-        <Button variant="outline" size="sm" onClick={() => refetch()} disabled={isFetching} className="gap-2 self-start sm:self-auto">
-          <RefreshCw className={cn('w-4 h-4', isFetching && 'animate-spin')} />
-          Обновить
-        </Button>
-      </div>
-
-      <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
+  const dashboardBlocks = [
+    {
+      id: 'infrastructure',
+      title: 'Инфраструктура',
+      defaultSpan: 2,
+      children: (
         <ModulePanel
           icon={Server}
           title="Инфраструктура"
@@ -277,7 +270,13 @@ export default function AdminOverview({ onSelectSection = noopSelectSection }) {
             />
           </div>
         </ModulePanel>
-
+      ),
+    },
+    {
+      id: 'collection',
+      title: 'Сбор данных',
+      defaultSpan: 2,
+      children: (
         <ModulePanel
           icon={Clock}
           title="Сбор данных"
@@ -323,7 +322,13 @@ export default function AdminOverview({ onSelectSection = noopSelectSection }) {
             </div>
           </div>
         </ModulePanel>
-
+      ),
+    },
+    {
+      id: 'users-access',
+      title: 'Пользователи и доступ',
+      defaultSpan: 2,
+      children: (
         <ModulePanel
           icon={Users}
           title="Пользователи и доступ"
@@ -369,7 +374,13 @@ export default function AdminOverview({ onSelectSection = noopSelectSection }) {
             />
           </div>
         </ModulePanel>
-
+      ),
+    },
+    {
+      id: 'traffic',
+      title: 'Посещаемость',
+      defaultSpan: 2,
+      children: (
         <ModulePanel
           icon={Activity}
           title="Посещаемость"
@@ -410,27 +421,149 @@ export default function AdminOverview({ onSelectSection = noopSelectSection }) {
             <DetailRow label="Окно онлайн" value={`${metrics?.traffic?.onlineWindowMinutes || 5} мин.`} />
           </div>
         </ModulePanel>
-      </div>
-
-      <Card className="p-4 border-border shadow-warm-sm">
-        <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-          <div className="flex items-start gap-3">
-            <div className="w-10 h-10 rounded-md bg-muted text-muted-foreground flex items-center justify-center">
-              <Database className="w-5 h-5" />
+      ),
+    },
+    {
+      id: 'data-links',
+      title: 'Быстрые переходы',
+      defaultSpan: 'full',
+      allowedSpans: [2, 3, 'full'],
+      children: (
+        <Card className="p-4 border-border shadow-warm-sm">
+          <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+            <div className="flex items-start gap-3">
+              <div className="w-10 h-10 rounded-md bg-muted text-muted-foreground flex items-center justify-center">
+                <Database className="w-5 h-5" />
+              </div>
+              <div>
+                <h3 className="font-semibold text-foreground">Быстрые переходы к данным</h3>
+                <p className="text-sm text-muted-foreground">Откройте список, который объясняет выбранную метрику.</p>
+              </div>
             </div>
-            <div>
-              <h3 className="font-semibold text-foreground">Быстрые переходы к данным</h3>
-              <p className="text-sm text-muted-foreground">Откройте список, который объясняет выбранную метрику.</p>
+            <div className="flex flex-wrap gap-2">
+              <Button size="sm" variant="outline" onClick={() => onSelectSection('events')}>События</Button>
+              <Button size="sm" variant="outline" onClick={() => onSelectSection('raw-frames')}>Raw Frames</Button>
+              <Button size="sm" variant="outline" onClick={() => onSelectSection('snapshots')}>Снимки</Button>
+              <Button size="sm" variant="outline" onClick={() => onSelectSection('dead-letters')}>Ошибки</Button>
             </div>
           </div>
-          <div className="flex flex-wrap gap-2">
-            <Button size="sm" variant="outline" onClick={() => onSelectSection('events')}>События</Button>
-            <Button size="sm" variant="outline" onClick={() => onSelectSection('raw-frames')}>Raw Frames</Button>
-            <Button size="sm" variant="outline" onClick={() => onSelectSection('snapshots')}>Снимки</Button>
-            <Button size="sm" variant="outline" onClick={() => onSelectSection('dead-letters')}>Ошибки</Button>
+        </Card>
+      ),
+    },
+  ];
+
+  return (
+    <div className="space-y-5">
+      <Card className="p-3 border-border shadow-warm-sm">
+        <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+          <div className="min-w-0">
+            <h2 className="text-lg font-bold text-foreground">Операционный обзор</h2>
+            <p className="text-sm text-muted-foreground">
+              Последнее обновление: {formatDate(metrics?.sampledAt)}
+            </p>
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
+            <Badge variant="outline">API process</Badge>
+            {bull.unavailable ? (
+              <Badge variant="outline" className="text-warning border-warning/40">BullMQ недоступна</Badge>
+            ) : (
+              <Badge variant="secondary">BullMQ</Badge>
+            )}
+            <Badge variant="outline">Онлайн окно: {metrics?.traffic?.onlineWindowMinutes || 5} мин.</Badge>
+            <Button variant="outline" size="sm" onClick={() => refetch()} disabled={isFetching} className="gap-2">
+              <RefreshCw className={cn('w-4 h-4', isFetching && 'animate-spin')} />
+              Обновить
+            </Button>
           </div>
         </div>
       </Card>
+
+      <div
+        className="grid gap-3"
+        style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))' }}
+      >
+        <StatTile
+          icon={Cpu}
+          label="CPU"
+          value={`${formatNumber(system.cpuLoadPct)}%`}
+          description="Нагрузка API"
+          progress={system.cpuLoadPct}
+          tone={cpuTone}
+          onClick={() => onSelectSection('swagger')}
+          className="min-h-[128px] bg-card"
+        />
+        <StatTile
+          icon={Server}
+          label="RAM"
+          value={`${formatNumber(system.memoryLoadPct)}%`}
+          description={formatBytes(system.memoryUsedBytes)}
+          progress={system.memoryLoadPct}
+          tone={memoryTone}
+          onClick={() => onSelectSection('swagger')}
+          className="min-h-[128px] bg-card"
+        />
+        <StatTile
+          icon={Clock}
+          label="Очередь"
+          value={formatNumber(queuePending)}
+          description="Ожидают сбора"
+          tone={queuePending > 0 ? 'warning' : 'success'}
+          onClick={() => onSelectSection('collection-runner')}
+          className="min-h-[128px] bg-card"
+        />
+        <StatTile
+          icon={Users}
+          label="Пользователи"
+          value={formatNumber(metrics?.users?.registered)}
+          description={`Онлайн: ${formatNumber(metrics?.users?.online)}`}
+          tone="blue"
+          onClick={() => onSelectSection('user-subscriptions')}
+          className="min-h-[128px] bg-card"
+        />
+        <StatTile
+          icon={WalletCards}
+          label="Оплачены"
+          value={formatNumber(metrics?.subscriptions?.paidTotal)}
+          description={`Активных: ${formatNumber(metrics?.subscriptions?.paidActive)}`}
+          tone="success"
+          onClick={() => onSelectSection('user-subscriptions')}
+          className="min-h-[128px] bg-card"
+        />
+        <StatTile
+          icon={Package}
+          label="Товары"
+          value={formatNumber(metrics?.products?.total)}
+          description={`Токены: ${formatNumber(metrics?.products?.accountsWithTokens)}`}
+          tone="violet"
+          to="/products"
+          className="min-h-[128px] bg-card"
+        />
+        <StatTile
+          icon={HardDrive}
+          label="БД"
+          value={formatBytes(metrics?.database?.sizeBytes)}
+          description="Занято на диске"
+          tone="violet"
+          onClick={() => onSelectSection('raw-frames')}
+          className="min-h-[128px] bg-card"
+        />
+        <StatTile
+          icon={Gauge}
+          label="Пик нагрузки"
+          value={`${formatNumber(maxLoad.cpuLoadPct)}%`}
+          description={formatDate(maxLoad.recordedAt)}
+          progress={maxLoad.cpuLoadPct}
+          tone="warning"
+          onClick={() => onSelectSection('swagger')}
+          className="min-h-[128px] bg-card"
+        />
+      </div>
+
+      <AdminDashboardGrid
+        storageKey="admin-overview-dashboard-layout"
+        title="Модули обзора"
+        items={dashboardBlocks}
+      />
     </div>
   );
 }

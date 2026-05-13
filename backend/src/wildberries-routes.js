@@ -4,7 +4,12 @@ import {
   WbSellerApi,
   WbSellerApiError,
 } from './wildberries-seller-api.js';
-import { assertOwnedReferences, getOwnedRecord, isAdminAuth } from './entity-access.js';
+import {
+  assertOwnedReferences,
+  getOwnedRecord,
+  isAdminAuth,
+  PUBLIC_RECORD_OWNER,
+} from './entity-access.js';
 import { jobQueue, WB_COLLECT_PRODUCT_JOB } from './queue.js';
 import {
   collectWbProduct,
@@ -29,6 +34,20 @@ const tokenMeta = (token) => {
   };
 };
 
+const SHARED_SELLER_TOKEN_ENV_KEYS = [
+  'WB_SELLER_API_TOKEN',
+  'WILDBERRIES_SELLER_API_TOKEN',
+  'WB_API_TOKEN',
+];
+
+const getSharedSellerToken = () => {
+  for (const key of SHARED_SELLER_TOKEN_ENV_KEYS) {
+    const token = String(process.env[key] ?? '').trim();
+    if (token) return token;
+  }
+  return '';
+};
+
 const getClient = async (pool, clientId, auth) => {
   return getOwnedRecord(pool, {
     table: 'clients',
@@ -49,6 +68,77 @@ const getProduct = async (pool, productId, auth) => {
   });
 };
 
+const syncWbLogisticsDirections = async (pool, token, ownerEmail) => {
+  const timeoutMs = Number(process.env.WB_SELLER_API_TIMEOUT_MS || 15_000);
+  const api = new WbSellerApi();
+  const endpointCalls = [
+    { key: 'marketplaceOffices', call: () => api.getMarketplaceOffices({ token, timeoutMs }) },
+    { key: 'marketplaceWarehouses', call: () => api.getMarketplaceWarehouses({ token, timeoutMs }) },
+    { key: 'suppliesWarehouses', call: () => api.getSuppliesWarehouses({ token, timeoutMs }) },
+  ];
+  const settled = await Promise.allSettled(
+    endpointCalls.map(async (entry) => ({ key: entry.key, payload: await entry.call() })),
+  );
+
+  const payloads = [];
+  const errors = [];
+  settled.forEach((result, index) => {
+    if (result.status === 'fulfilled') {
+      payloads.push(result.value);
+      return;
+    }
+    errors.push({
+      key: endpointCalls[index].key,
+      error: result.reason instanceof Error ? result.reason.message : String(result.reason),
+    });
+  });
+
+  if (payloads.length === 0) throw settled[0]?.reason || new Error('Wildberries sync failed');
+
+  const syncedAt = new Date().toISOString();
+  const directions = normalizeWbLogisticsDirections(payloads, { syncedAt });
+
+  let inserted = 0;
+  let updated = 0;
+  for (const direction of directions) {
+    const result = await upsertLogisticsDirection(pool, direction, ownerEmail);
+    if (result.inserted) inserted += 1;
+    updated += result.updated;
+  }
+
+  return {
+    ok: true,
+    source: 'wildberries',
+    synced_at: syncedAt,
+    count: directions.length,
+    inserted,
+    updated,
+    errors,
+    directions,
+  };
+};
+
+const syncWbCommissionDirectory = async (pool, token, ownerEmail, locale = 'ru') => {
+  const timeoutMs = Number(process.env.WB_SELLER_API_TIMEOUT_MS || 15_000);
+  const api = new WbSellerApi();
+  const payload = await api.getCommissionRaw({
+    token,
+    timeoutMs,
+    query: { locale },
+  });
+  const syncedAt = new Date().toISOString();
+  const rows = normalizeWbCommissionDirectory(payload, { syncedAt });
+  const saved = await upsertMarketplaceCommissionDirectory(pool, rows, ownerEmail);
+
+  return {
+    ok: true,
+    source: 'wildberries',
+    synced_at: syncedAt,
+    count: saved.length,
+    items: saved,
+  };
+};
+
 const upsertLogisticsDirection = async (pool, direction, createdBy) => {
   const values = [
     direction.source,
@@ -67,7 +157,7 @@ const upsertLogisticsDirection = async (pool, direction, createdBy) => {
            synced_at = $6::timestamptz,
            updated_date = now()
      WHERE source = $1 AND direction_id = $2
-       AND created_by = $7
+       AND created_by IS NOT DISTINCT FROM $7
      RETURNING id`,
     [...values, createdBy || null],
   );
@@ -303,6 +393,59 @@ export function registerWildberriesRoutes(app, pool, requireAuth, options = {}) 
     }
   });
 
+  app.post('/wildberries/directories/logistics/sync', ...syncAuth, async (req, res, next) => {
+    try {
+      if (!isAdminAuth(req.auth)) return res.status(403).json({ error: 'Admin role is required' });
+      const token = getSharedSellerToken();
+      if (!token) {
+        return res.status(400).json({
+          error: `Shared WB Seller API token is not configured (${SHARED_SELLER_TOKEN_ENV_KEYS.join(' or ')})`,
+        });
+      }
+
+      const result = await syncWbLogisticsDirections(pool, token, PUBLIC_RECORD_OWNER);
+      return res.json({
+        ...result,
+        scope: 'public',
+        owner: PUBLIC_RECORD_OWNER,
+        token: tokenMeta(token),
+      });
+    } catch (error) {
+      const { status, message } = toClientError(error);
+      if (status >= 500 && !(error instanceof WbSellerApiError)) return next(error);
+      return res.status(status).json({ error: message });
+    }
+  });
+
+  app.post('/wildberries/directories/commission/sync', ...syncAuth, async (req, res, next) => {
+    try {
+      if (!isAdminAuth(req.auth)) return res.status(403).json({ error: 'Admin role is required' });
+      const token = getSharedSellerToken();
+      if (!token) {
+        return res.status(400).json({
+          error: `Shared WB Seller API token is not configured (${SHARED_SELLER_TOKEN_ENV_KEYS.join(' or ')})`,
+        });
+      }
+
+      const result = await syncWbCommissionDirectory(
+        pool,
+        token,
+        PUBLIC_RECORD_OWNER,
+        req.body?.locale || req.query?.locale || 'ru',
+      );
+      return res.json({
+        ...result,
+        scope: 'public',
+        owner: PUBLIC_RECORD_OWNER,
+        token: tokenMeta(token),
+      });
+    } catch (error) {
+      const { status, message } = toClientError(error);
+      if (status >= 500 && !(error instanceof WbSellerApiError)) return next(error);
+      return res.status(status).json({ error: message });
+    }
+  });
+
   app.post('/wildberries/clients/:clientId/logistics-directions/sync', ...syncAuth, async (req, res, next) => {
     try {
       const client = await getClient(pool, req.params.clientId, req.auth);
@@ -313,56 +456,14 @@ export function registerWildberriesRoutes(app, pool, requireAuth, options = {}) 
         return res.status(400).json({ error: 'WB Seller API token is not configured for this client' });
       }
 
-      const timeoutMs = Number(process.env.WB_SELLER_API_TIMEOUT_MS || 15_000);
-      const api = new WbSellerApi();
-      const endpointCalls = [
-        { key: 'marketplaceOffices', call: () => api.getMarketplaceOffices({ token, timeoutMs }) },
-        { key: 'marketplaceWarehouses', call: () => api.getMarketplaceWarehouses({ token, timeoutMs }) },
-        { key: 'suppliesWarehouses', call: () => api.getSuppliesWarehouses({ token, timeoutMs }) },
-      ];
-      const settled = await Promise.allSettled(
-        endpointCalls.map(async (entry) => ({ key: entry.key, payload: await entry.call() })),
-      );
-
-      const payloads = [];
-      const errors = [];
-      settled.forEach((result, index) => {
-        if (result.status === 'fulfilled') {
-          payloads.push(result.value);
-          return;
-        }
-        errors.push({
-          key: endpointCalls[index].key,
-          error: result.reason instanceof Error ? result.reason.message : String(result.reason),
-        });
-      });
-
-      if (payloads.length === 0) throw settled[0]?.reason || new Error('Wildberries sync failed');
-
-      const syncedAt = new Date().toISOString();
-      const directions = normalizeWbLogisticsDirections(payloads, { syncedAt });
-
-      let inserted = 0;
-      let updated = 0;
       const ownerEmail = client.created_by || req.auth?.email;
-      for (const direction of directions) {
-        const result = await upsertLogisticsDirection(pool, direction, ownerEmail);
-        if (result.inserted) inserted += 1;
-        updated += result.updated;
-      }
+      const result = await syncWbLogisticsDirections(pool, token, ownerEmail);
 
       return res.json({
-        ok: true,
-        source: 'wildberries',
+        ...result,
         client_id: client.id,
         client_name: client.name,
-        synced_at: syncedAt,
-        count: directions.length,
-        inserted,
-        updated,
-        errors,
         token: tokenMeta(token),
-        directions,
       });
     } catch (error) {
       const { status, message } = toClientError(error);
@@ -381,27 +482,19 @@ export function registerWildberriesRoutes(app, pool, requireAuth, options = {}) 
         return res.status(400).json({ error: 'WB Seller API token is not configured for this client' });
       }
 
-      const timeoutMs = Number(process.env.WB_SELLER_API_TIMEOUT_MS || 15_000);
-      const api = new WbSellerApi();
-      const payload = await api.getCommissionRaw({
-        token,
-        timeoutMs,
-        query: { locale: req.body?.locale || req.query?.locale || 'ru' },
-      });
-      const syncedAt = new Date().toISOString();
-      const rows = normalizeWbCommissionDirectory(payload, { syncedAt });
       const ownerEmail = client.created_by || req.auth?.email;
-      const saved = await upsertMarketplaceCommissionDirectory(pool, rows, ownerEmail);
+      const result = await syncWbCommissionDirectory(
+        pool,
+        token,
+        ownerEmail,
+        req.body?.locale || req.query?.locale || 'ru',
+      );
 
       return res.json({
-        ok: true,
-        source: 'wildberries',
+        ...result,
         client_id: client.id,
         client_name: client.name,
-        synced_at: syncedAt,
-        count: saved.length,
         token: tokenMeta(token),
-        items: saved,
       });
     } catch (error) {
       const { status, message } = toClientError(error);

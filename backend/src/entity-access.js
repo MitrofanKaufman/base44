@@ -1,4 +1,5 @@
 const READONLY_FIELDS = new Set(['id', 'created_date', 'updated_date', 'created_by']);
+export const PUBLIC_RECORD_OWNER = 'system';
 
 const OWNED_REFERENCES = {
   client_id: { table: 'clients', idField: 'id' },
@@ -29,11 +30,17 @@ export const sanitizeInput = (def, payload = {}) => {
   return out;
 };
 
-function buildAccessClause(def, auth, index) {
+function buildAccessClause(def, auth, index, options = {}) {
   if (isAdminAuth(auth)) return null;
   const createdByField = toDbField(def, 'created_by');
   if (!createdByField || !auth?.email) {
     return { clause: 'FALSE', values: [] };
+  }
+  if (def.publicRead && options.includePublic !== false) {
+    return {
+      clause: `(${createdByField} = $${index} OR ${createdByField} = $${index + 1} OR ${createdByField} IS NULL)`,
+      values: [auth.email, PUBLIC_RECORD_OWNER],
+    };
   }
   return { clause: `${createdByField} = $${index}`, values: [auth.email] };
 }
@@ -87,7 +94,7 @@ export async function getOwnedRecord(pool, {
   return result.rows[0] || null;
 }
 
-export function buildWhere(query = {}, def, auth = {}) {
+export function buildWhere(query = {}, def, auth = {}, options = {}) {
   const values = [];
   const clauses = [];
   let idx = 1;
@@ -102,7 +109,7 @@ export function buildWhere(query = {}, def, auth = {}) {
     filterCount += 1;
   }
 
-  const access = buildAccessClause(def, auth, idx);
+  const access = buildAccessClause(def, auth, idx, options);
   if (access) {
     clauses.push(access.clause);
     values.push(...access.values);

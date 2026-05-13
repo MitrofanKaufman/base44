@@ -17,6 +17,7 @@ services:
       - AUTH_COOKIE_NAME=${AUTH_COOKIE_NAME:-base44_access_token}
       - CORS_ORIGIN=${CORS_ORIGIN:-http://localhost}
       - ALLOW_ROLE_OVERRIDE=${ALLOW_ROLE_OVERRIDE:-false}
+      - WB_SELLER_API_TOKEN=${WB_SELLER_API_TOKEN:-}
     ports:
       - "3000:3000"
     restart: unless-stopped

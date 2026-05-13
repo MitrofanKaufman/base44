@@ -296,6 +296,7 @@ export const entityDefinitions = {
   LogisticsDirectory: {
     table: 'logistics_directories',
     idField: 'id',
+    publicRead: true,
     required: ['source', 'direction_id', 'direction_name', 'tariffs'],
     search: ['source', 'direction_id', 'direction_name'],
     fields: {
@@ -314,6 +315,7 @@ export const entityDefinitions = {
   MarketplaceCommissionDirectory: {
     table: 'marketplace_commission_directories',
     idField: 'id',
+    publicRead: true,
     required: ['source', 'category_id', 'category_name', 'commission_by_model'],
     search: ['source', 'category_id', 'category_name', 'parent_category_name'],
     fields: {
