@@ -15,6 +15,10 @@ function getErrorMessage(error) {
   return error?.message || 'Не удалось собрать товар с маркетплейса.';
 }
 
+function hasProductCreated(error) {
+  return Boolean(error && typeof error === 'object' && 'productCreated' in error);
+}
+
 function buildProductPayload(mapped, article, projectId, clientId) {
   return {
     ...mapped,
@@ -88,8 +92,10 @@ export default function WbImportModal({ projects, clients: _clients, onClose }) 
           mapped: collection.mapped || preview,
         };
       } catch (collectionError) {
-        collectionError.productCreated = true;
-        throw collectionError;
+        throw Object.assign(
+          collectionError instanceof Error ? collectionError : new Error(String(collectionError)),
+          { productCreated: true },
+        );
       }
     },
     onMutate: () => {
@@ -104,7 +110,7 @@ export default function WbImportModal({ projects, clients: _clients, onClose }) 
     },
     onError: (mutationError) => {
       setStatusText('');
-      if (mutationError?.productCreated) {
+      if (hasProductCreated(mutationError)) {
         qc.invalidateQueries({ queryKey: ['products'] });
         setError(`Товар добавлен, но автоматический сбор не завершился: ${getErrorMessage(mutationError)}`);
         return;

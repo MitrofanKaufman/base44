@@ -298,6 +298,90 @@ CREATE TABLE IF NOT EXISTS wb_raw (
 CREATE INDEX IF NOT EXISTS idx_wb_raw_article_fetched ON wb_raw(article, fetched_at DESC);
 CREATE INDEX IF NOT EXISTS idx_wb_raw_user_fetched ON wb_raw(user_email, fetched_at DESC);
 
+CREATE TABLE IF NOT EXISTS admin_metric_snapshots (
+  id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
+  cpu_load_pct NUMERIC NOT NULL DEFAULT 0,
+  memory_used_bytes BIGINT NOT NULL DEFAULT 0,
+  memory_limit_bytes BIGINT NOT NULL DEFAULT 0,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS idx_admin_metric_snapshots_created
+  ON admin_metric_snapshots(created_at DESC);
+
+CREATE TABLE IF NOT EXISTS user_activity (
+  id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
+  user_id TEXT,
+  user_email TEXT NOT NULL,
+  session_id TEXT NOT NULL,
+  path TEXT,
+  user_agent TEXT,
+  first_seen_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  last_seen_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  created_date TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_date TIMESTAMPTZ NOT NULL DEFAULT now(),
+  UNIQUE(user_email, session_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_user_activity_last_seen
+  ON user_activity(last_seen_at DESC);
+CREATE INDEX IF NOT EXISTS idx_user_activity_email_last_seen
+  ON user_activity(user_email, last_seen_at DESC);
+
+CREATE TABLE IF NOT EXISTS admin_broadcasts (
+  id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
+  title TEXT NOT NULL,
+  body TEXT NOT NULL,
+  audience TEXT NOT NULL DEFAULT 'all',
+  category TEXT NOT NULL DEFAULT 'notification',
+  status TEXT NOT NULL DEFAULT 'draft' CHECK (status IN ('draft', 'sent', 'scheduled', 'canceled')),
+  filters JSONB NOT NULL DEFAULT '{}'::jsonb,
+  scheduled_at TIMESTAMPTZ,
+  sent_at TIMESTAMPTZ,
+  created_date TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_date TIMESTAMPTZ NOT NULL DEFAULT now(),
+  created_by TEXT
+);
+
+CREATE INDEX IF NOT EXISTS idx_admin_broadcasts_status_created
+  ON admin_broadcasts(status, created_date DESC);
+
+CREATE TABLE IF NOT EXISTS user_messages (
+  id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
+  broadcast_id TEXT REFERENCES admin_broadcasts(id) ON DELETE SET NULL,
+  user_email TEXT NOT NULL,
+  title TEXT NOT NULL,
+  body TEXT NOT NULL,
+  category TEXT NOT NULL DEFAULT 'notification',
+  read_at TIMESTAMPTZ,
+  delivered_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  created_date TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS idx_user_messages_user_created
+  ON user_messages(user_email, created_date DESC);
+CREATE INDEX IF NOT EXISTS idx_user_messages_user_unread
+  ON user_messages(user_email, read_at) WHERE read_at IS NULL;
+
+CREATE TABLE IF NOT EXISTS broadcast_schedules (
+  id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
+  title TEXT NOT NULL,
+  body TEXT NOT NULL,
+  audience TEXT NOT NULL DEFAULT 'all',
+  category TEXT NOT NULL DEFAULT 'notification',
+  cadence TEXT NOT NULL DEFAULT 'once' CHECK (cadence IN ('once', 'daily', 'weekly', 'subscription_expiring')),
+  filters JSONB NOT NULL DEFAULT '{}'::jsonb,
+  status TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('active', 'paused', 'canceled')),
+  next_run_at TIMESTAMPTZ,
+  last_run_at TIMESTAMPTZ,
+  created_date TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_date TIMESTAMPTZ NOT NULL DEFAULT now(),
+  created_by TEXT
+);
+
+CREATE INDEX IF NOT EXISTS idx_broadcast_schedules_due
+  ON broadcast_schedules(status, next_run_at);
+
 CREATE TABLE IF NOT EXISTS price_history (
   id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
   product_id TEXT NOT NULL,

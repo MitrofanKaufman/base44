@@ -1,4 +1,4 @@
-import { BarChart3, Zap, Shield, Users, BookOpen, FileText, Server, AlertTriangle, BarChart, Sparkles, ArrowRight } from 'lucide-react';
+import { BarChart3, Zap, Shield, Users, BookOpen, FileText, Server, AlertTriangle, BarChart, Sparkles, ArrowRight, MailPlus } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 const SECTIONS = [
@@ -8,6 +8,7 @@ const SECTIONS = [
   { id: 'subscriptions', label: 'Пакеты подписок', icon: Shield, gradient: 'from-indigo-500 to-purple-500', desc: 'Тарифные планы' },
   { id: 'user-subscriptions', label: 'Подписки', icon: Users, gradient: 'from-pink-500 to-rose-500', desc: 'Пользовательские подписки' },
   { id: 'scheduled-tasks', label: 'Расписание', icon: BarChart, gradient: 'from-emerald-500 to-teal-500', desc: 'Фоновые задачи' },
+  { id: 'broadcasts', label: 'Рассылки', icon: MailPlus, gradient: 'from-sky-500 to-indigo-500', desc: 'Сообщения и автонапоминания' },
   { id: 'dead-letters', label: 'Ошибки', icon: AlertTriangle, gradient: 'from-red-500 to-orange-500', desc: 'Обработка ошибок' },
   { id: 'events', label: 'События', icon: Server, gradient: 'from-teal-500 to-cyan-500', desc: 'Marketplace события' },
 ];

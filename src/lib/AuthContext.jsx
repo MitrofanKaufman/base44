@@ -1,6 +1,7 @@
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import { base44 } from '@/api/base44Client';
 import { BackgroundSyncService } from '@/lib/BackgroundSyncService';
+import { startActivityHeartbeat, stopActivityHeartbeat } from '@/lib/activityHeartbeat';
 import { initializeSubscriptions } from '@/lib/initSubscriptions';
 
 const AuthContext = createContext(null);
@@ -32,6 +33,7 @@ export const AuthProvider = ({ children }) => {
 
     BackgroundSyncService.stop();
     BackgroundSyncService.start();
+    startActivityHeartbeat();
 
     if (isAdminUser(currentUser)) {
       initializeSubscriptions().catch((error) => {
@@ -61,6 +63,7 @@ export const AuthProvider = ({ children }) => {
       });
       setIsLoadingAuth(false);
       BackgroundSyncService.stop();
+      stopActivityHeartbeat();
       return null;
     }
   }, [applyAuthenticatedUser]);
@@ -70,6 +73,7 @@ export const AuthProvider = ({ children }) => {
 
     return () => {
       BackgroundSyncService.stop();
+      stopActivityHeartbeat();
     };
   }, [checkUserAuth]);
 
@@ -99,6 +103,7 @@ export const AuthProvider = ({ children }) => {
       setAuthError(null);
       setIsLoadingAuth(false);
       BackgroundSyncService.stop();
+      stopActivityHeartbeat();
 
       if (shouldRedirect) {
         replaceBrowserPath('/login');

@@ -1,12 +1,15 @@
 import { Link, Outlet, useLocation } from 'react-router-dom';
 // Layout
 import { useState } from 'react';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   LayoutDashboard, Users, FolderOpen, Package, Calculator,
-  TrendingUp, Menu, ChevronLeft, ChevronRight, BarChart3, Shield, Settings, LogOut
+  TrendingUp, Menu, ChevronLeft, ChevronRight, BarChart3, Shield, Settings, LogOut,
+  Bell, CheckCircle2
 } from 'lucide-react';
 import { useAuth } from '@/lib/AuthContext';
 import { isUser1Account } from '@/lib/AdminInitializer';
+import { listUserMessages, markUserMessageRead } from '@/lib/adminApi';
 import { cn } from '@/lib/utils';
 
 const nav = [
@@ -24,9 +27,11 @@ const adminNav = [
 ];
 
 export default function Layout() {
+  const queryClient = useQueryClient();
   const [collapsed, setCollapsed] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
   const [profileMenuOpen, setProfileMenuOpen] = useState(false);
+  const [messagesOpen, setMessagesOpen] = useState(false);
   const location = useLocation();
   const { user, logout } = useAuth();
 
@@ -39,8 +44,23 @@ export default function Layout() {
   const currentPage = location.pathname.startsWith('/settings')
     ? { label: 'Настройки пользователя' }
     : allNav.find(n => isActive(n.to));
+  const { data: messagesData = { items: [], unread: 0 } } = useQuery({
+    queryKey: ['user-messages'],
+    queryFn: () => listUserMessages(20),
+    enabled: Boolean(user?.email),
+    refetchInterval: 60_000,
+  });
+  const messages = messagesData.items || [];
+  const unreadMessages = messagesData.unread || 0;
+  const markReadMutation = useMutation({
+    mutationFn: markUserMessageRead,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['user-messages'] });
+    },
+  });
 
   const closeProfileMenu = () => setProfileMenuOpen(false);
+  const closeMessagesMenu = () => setMessagesOpen(false);
 
   const handleProfileMenuBlur = (event) => {
     if (!event.currentTarget.contains(event.relatedTarget)) {
@@ -51,6 +71,18 @@ export default function Layout() {
   const handleProfileMenuKeyDown = (event) => {
     if (event.key === 'Escape') {
       closeProfileMenu();
+    }
+  };
+
+  const handleMessagesBlur = (event) => {
+    if (!event.currentTarget.contains(event.relatedTarget)) {
+      closeMessagesMenu();
+    }
+  };
+
+  const handleMessagesKeyDown = (event) => {
+    if (event.key === 'Escape') {
+      closeMessagesMenu();
     }
   };
 
@@ -177,6 +209,93 @@ export default function Layout() {
           </div>
 
           <div className="flex items-center gap-3">
+            <div
+              className="relative"
+              onBlur={handleMessagesBlur}
+              onKeyDown={handleMessagesKeyDown}
+            >
+              <button
+                type="button"
+                aria-haspopup="menu"
+                aria-expanded={messagesOpen}
+                aria-label="Открыть уведомления"
+                onClick={() => setMessagesOpen(open => !open)}
+                className="relative w-9 h-9 rounded-lg flex items-center justify-center transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                style={{ color: '#6f6257', background: '#f7f2eb', border: '1px solid #e4d7c9' }}
+              >
+                <Bell className="w-4 h-4" />
+                {unreadMessages > 0 && (
+                  <span className="absolute -top-1 -right-1 min-w-4 h-4 px-1 rounded-full text-[10px] leading-4 text-white text-center" style={{ background: '#b45309' }}>
+                    {unreadMessages > 9 ? '9+' : unreadMessages}
+                  </span>
+                )}
+              </button>
+
+              <div
+                role="menu"
+                className={cn(
+                  "absolute right-0 top-full mt-2 w-[340px] max-w-[calc(100vw-2rem)] rounded-xl border border-border bg-card shadow-warm-sm p-2 transition-all z-50",
+                  messagesOpen
+                    ? "opacity-100 visible translate-y-0"
+                    : "opacity-0 invisible -translate-y-1 pointer-events-none"
+                )}
+                style={{ borderColor: '#e4d7c9', background: '#fffdf9' }}
+              >
+                <div className="px-2 py-2 border-b flex items-center justify-between" style={{ borderColor: '#f0e3d5' }}>
+                  <div>
+                    <p className="text-sm font-semibold" style={{ color: '#201a15' }}>Уведомления</p>
+                    <p className="text-xs" style={{ color: '#8a7060' }}>{unreadMessages} непрочитанных</p>
+                  </div>
+                </div>
+
+                <div className="max-h-80 overflow-y-auto py-1">
+                  {messages.length === 0 && (
+                    <div className="px-3 py-8 text-center text-sm" style={{ color: '#8a7060' }}>
+                      Сообщений нет
+                    </div>
+                  )}
+
+                  {messages.map(message => {
+                    const unread = !message.read_at;
+                    return (
+                      <div
+                        key={message.id}
+                        role="menuitem"
+                        className="px-2 py-2 rounded-lg"
+                        style={{ background: unread ? '#fff7ed' : 'transparent' }}
+                      >
+                        <div className="flex items-start gap-2">
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm font-semibold truncate" style={{ color: '#201a15' }}>
+                              {message.title}
+                            </p>
+                            <p className="text-xs mt-1 line-clamp-2" style={{ color: '#6f6257' }}>
+                              {message.body}
+                            </p>
+                            <p className="text-[11px] mt-1" style={{ color: '#a09080' }}>
+                              {message.created_date ? new Date(message.created_date).toLocaleString('ru-RU') : ''}
+                            </p>
+                          </div>
+                          {unread && (
+                            <button
+                              type="button"
+                              title="Отметить прочитанным"
+                              onClick={() => markReadMutation.mutate(message.id)}
+                              disabled={markReadMutation.isPending}
+                              className="p-1.5 rounded-md hover:bg-white transition-colors"
+                              style={{ color: '#9a3412' }}
+                            >
+                              <CheckCircle2 className="w-4 h-4" />
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            </div>
+
             <div className="hidden sm:flex items-center gap-2 px-3 py-1.5 rounded-xl"
               style={{ background: '#f7f2eb', border: '1px solid #e4d7c9' }}>
               <div className="w-2 h-2 rounded-full" style={{ background: '#22c55e' }} />

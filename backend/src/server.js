@@ -10,8 +10,11 @@ import { getPool } from './db.js';
 import { entityDefinitions } from './entity-definitions.js';
 import { openapi } from './swagger.js';
 import { registerQueueRoutes } from './queue-routes.js';
+import { jobQueue } from './queue.js';
 import { requireAuth, requireRole } from './auth.js';
 import { registerAuthRoutes } from './auth-routes.js';
+import { registerAdminRoutes } from './admin-routes.js';
+import { ensureAdminTables } from './admin-service.js';
 import { registerWildberriesRoutes } from './wildberries-routes.js';
 import { ensureWildberriesCollectionTables } from './wildberries-repository.js';
 import {
@@ -203,6 +206,7 @@ app.get('/openapi.json', requireAuth, requireRole('admin'), (_req, res) => res.j
 app.use('/docs', requireAuth, requireRole('admin'), swaggerUi.serve, swaggerUi.setup(openapi));
 registerAuthRoutes(app, pool, { authRateLimiter });
 registerQueueRoutes(app, requireAuth, requireRole('admin'));
+registerAdminRoutes(app, pool, { requireAuth, requireRole, jobQueue });
 registerWildberriesRoutes(app, pool, requireAuth, { syncRateLimiter: wbSyncRateLimiter });
 
 for (const [name, def] of Object.entries(entityDefinitions)) {
@@ -217,6 +221,7 @@ app.use((err, _req, res, _next) => {
 
 await pool.query('ALTER TABLE app_users ADD COLUMN IF NOT EXISTS password_hash TEXT');
 await ensureWildberriesCollectionTables(pool);
+await ensureAdminTables(pool);
 
 app.listen(port, () => {
   console.log(`API listening on ${port}`);

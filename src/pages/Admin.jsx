@@ -15,6 +15,7 @@ import AdminScheduledTasks from '@/components/admin/AdminScheduledTasks';
 import SubscriptionsManager from '@/components/admin/SubscriptionsManager';
 import UserSubscriptionsManager from '@/components/admin/UserSubscriptionsManager';
 import SyncStatusWidget from '@/components/admin/SyncStatusWidget';
+import AdminBroadcasts from '@/components/admin/AdminBroadcasts';
 
 const TAB_LABELS = {
   'overview': 'Обзор',
@@ -23,6 +24,7 @@ const TAB_LABELS = {
   'user-subscriptions': 'Подписки пользователей',
   'collection-runner': 'Прогон сбора',
   'scheduled-tasks': 'Расписание',
+  'broadcasts': 'Рассылки',
   'documentation': 'Документация',
   'swagger': 'API',
   'events': 'События',
@@ -92,6 +94,7 @@ export default function Admin() {
         {activeTab === 'user-subscriptions' && <UserSubscriptionsManager />}
         {activeTab === 'collection-runner' && <AdminCollectionRunner />}
         {activeTab === 'scheduled-tasks' && <AdminScheduledTasks />}
+        {activeTab === 'broadcasts' && <AdminBroadcasts />}
         {activeTab === 'documentation' && <AdminDocumentation />}
         {activeTab === 'swagger' && <AdminSwagger />}
         {activeTab === 'events' && <AdminEvents />}
