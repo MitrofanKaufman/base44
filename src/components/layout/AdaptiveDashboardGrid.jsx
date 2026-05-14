@@ -1,5 +1,10 @@
+// src/components/layout/AdaptiveDashboardGrid.jsx
+// Компонент отображает адаптивную сетку с настраиваемыми блоками. Пользователи
+// могут регулировать ширину блоков и сворачивать/разворачивать разделы. Порядок
+// блоков фиксирован в соответствии с порядком массива items. Состояние
+// компоновки (ширина и свернутость) сохраняется в localStorage.
+
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { DragDropContext, Draggable, Droppable } from '@hello-pangea/dnd';
 import {
   ChevronDown,
   GripVertical,
@@ -29,10 +34,8 @@ const SPAN_SEQUENCE = [1, 2, 3, 'full'];
 
 function normalizeSpan(span, fallback = 1) {
   if (span === 'full') return 'full';
-
   const numericSpan = Number(span);
   if ([1, 2, 3].includes(numericSpan)) return numericSpan;
-
   return normalizeSpan(fallback, 1);
 }
 
@@ -49,10 +52,10 @@ function reconcileLayout(layout, items) {
   const seen = new Set();
   const nextLayout = [];
 
+  // Keep entries that still exist in items
   layout.forEach(entry => {
     const item = itemsById.get(entry.id);
     if (!item) return;
-
     seen.add(entry.id);
     nextLayout.push({
       id: entry.id,
@@ -61,9 +64,9 @@ function reconcileLayout(layout, items) {
     });
   });
 
+  // Add missing items with their defaults
   items.forEach(item => {
     if (seen.has(item.id)) return;
-
     nextLayout.push({
       id: item.id,
       span: normalizeSpan(item.defaultSpan),
@@ -78,16 +81,13 @@ function readLayout(storageKey, items) {
   if (typeof window === 'undefined' || !storageKey) {
     return createDefaultLayout(items);
   }
-
   try {
     const rawLayout = window.localStorage.getItem(storageKey);
     if (!rawLayout) return createDefaultLayout(items);
-
     const parsedLayout = JSON.parse(rawLayout);
     if (parsedLayout?.version !== LAYOUT_VERSION || !Array.isArray(parsedLayout.items)) {
       return createDefaultLayout(items);
     }
-
     return reconcileLayout(parsedLayout.items, items);
   } catch (_error) {
     return createDefaultLayout(items);
@@ -96,7 +96,6 @@ function readLayout(storageKey, items) {
 
 function persistLayout(storageKey, layout) {
   if (typeof window === 'undefined' || !storageKey) return;
-
   try {
     window.localStorage.setItem(
       storageKey,
@@ -106,7 +105,7 @@ function persistLayout(storageKey, layout) {
       }),
     );
   } catch (_error) {
-    // Пользовательская компоновка не должна ломать работу страницы.
+    // Состояние компоновки не критично для работы.
   }
 }
 
@@ -133,19 +132,15 @@ function getNextSpan(currentSpan, direction, allowedSpans = SPAN_SEQUENCE) {
     allowedSpans.length - 1,
     Math.max(0, startIndex + direction),
   );
-
   return allowedSpans[nextIndex];
 }
 
-function reorder(list, startIndex, endIndex) {
-  if (startIndex === endIndex) return list;
-
-  const next = [...list];
-  const [removed] = next.splice(startIndex, 1);
-  next.splice(endIndex, 0, removed);
-  return next;
-}
-
+/**
+ * A small reusable button used throughout the dashboard grid for icons with tooltips.
+ * It wraps the provided children in a Button component and automatically
+ * attaches a tooltip describing the action. This helper exists to avoid
+ * repetition when adding new control buttons to each grid item.
+ */
 function TooltipIconButton({ label, children, className = undefined, ...props }) {
   return (
     <Tooltip>
@@ -169,8 +164,6 @@ function TooltipIconButton({ label, children, className = undefined, ...props })
 function AdaptiveGridItem({
   item,
   isEditing,
-  draggableProvided,
-  draggableSnapshot,
   resizeItem,
   toggleItem,
 }) {
@@ -179,25 +172,18 @@ function AdaptiveGridItem({
 
   return (
     <section
-      ref={draggableProvided.innerRef}
-      {...draggableProvided.draggableProps}
       className={cn(
         'min-w-0 transition-opacity',
         getSpanClass(item.span),
         !isCollapsed && getRowSpanClass(item.defaultRowSpan),
-        draggableSnapshot.isDragging && 'z-20 opacity-90',
       )}
       style={{
-        ...draggableProvided.draggableProps.style,
         minHeight: item.minHeight,
       }}
     >
       {isEditing && (
         <div className="mb-2 flex items-center justify-between gap-2 rounded-md border border-dashed border-primary/40 bg-card/95 px-2 py-1.5">
-          <div
-            {...draggableProvided.dragHandleProps}
-            className="inline-flex h-7 min-w-0 cursor-grab items-center gap-1 rounded-md px-2 text-xs font-medium text-muted-foreground active:cursor-grabbing"
-          >
+          <div className="inline-flex h-7 min-w-0 items-center gap-1 rounded-md px-2 text-xs font-medium text-muted-foreground">
             <GripVertical className="h-4 w-4 flex-shrink-0" />
             <span className="truncate">{item.title || item.id}</span>
           </div>
@@ -285,44 +271,33 @@ export default function AdaptiveDashboardGrid({
   const itemSignature = items.map(item => `${item.id}:${item.defaultSpan || 1}`).join('|');
   const itemsById = useMemo(() => new Map(items.map(item => [item.id, item])), [items]);
 
+  // Reconcile layout whenever the list of items changes.
   useEffect(() => {
     setLayout(currentLayout => reconcileLayout(currentLayout, items));
   }, [itemSignature]);
 
+  // Persist layout changes.
   useEffect(() => {
     persistLayout(storageKey, layout);
   }, [layout, storageKey]);
 
+  // Build items in the fixed order defined by `items` while applying persisted
+  // spans and collapsed states from the saved layout. Order from saved layout is ignored.
   const orderedItems = useMemo(
-    () => layout
-      .map(entry => {
-        const item = itemsById.get(entry.id);
-        if (!item) return null;
-
-        return {
-          ...item,
-          span: normalizeSpan(entry.span, item.defaultSpan),
-          collapsed: Boolean(entry.collapsed ?? item.defaultCollapsed),
-        };
-      })
-      .filter(Boolean),
-    [itemsById, layout],
+    () => items.map((item) => {
+      const entry = layout.find(l => l.id === item.id) || {};
+      return {
+        ...item,
+        span: normalizeSpan(entry.span, item.defaultSpan),
+        collapsed: Boolean(entry.collapsed ?? item.defaultCollapsed),
+      };
+    }),
+    [items, layout],
   );
-
-  const handleDragEnd = useCallback((result) => {
-    if (!result.destination) return;
-
-    setLayout(currentLayout => reorder(
-      currentLayout,
-      result.source.index,
-      result.destination.index,
-    ));
-  }, []);
 
   const resizeItem = useCallback((id, direction) => {
     const item = itemsById.get(id);
     const allowedSpans = item?.allowedSpans || SPAN_SEQUENCE;
-
     setLayout(currentLayout => currentLayout.map(layoutItem => (
       layoutItem.id === id
         ? { ...layoutItem, span: getNextSpan(layoutItem.span, direction, allowedSpans) }
@@ -342,7 +317,6 @@ export default function AdaptiveDashboardGrid({
     if (typeof window !== 'undefined' && storageKey) {
       window.localStorage.removeItem(storageKey);
     }
-
     setLayout(createDefaultLayout(items));
   }, [items, storageKey]);
 
@@ -377,43 +351,23 @@ export default function AdaptiveDashboardGrid({
           </div>
         </div>
 
-        <DragDropContext onDragEnd={handleDragEnd}>
-          <Droppable droppableId={`${storageKey || 'adaptive'}-grid`} direction="horizontal">
-            {(droppableProvided, droppableSnapshot) => (
-              <div
-                ref={droppableProvided.innerRef}
-                {...droppableProvided.droppableProps}
-                className={cn(
-                  'grid items-start gap-3 transition-colors',
-                  desktopColumns === 3 && 'grid-cols-1 md:grid-cols-2 xl:grid-cols-3',
-                  droppableSnapshot.isDraggingOver && 'rounded-lg bg-primary/5',
-                )}
-                style={gridStyle}
-              >
-                {orderedItems.map((item, index) => (
-                  <Draggable
-                    key={item.id}
-                    draggableId={item.id}
-                    index={index}
-                    isDragDisabled={!isEditing}
-                  >
-                    {(draggableProvided, draggableSnapshot) => (
-                      <AdaptiveGridItem
-                        item={item}
-                        isEditing={isEditing}
-                        draggableProvided={draggableProvided}
-                        draggableSnapshot={draggableSnapshot}
-                        resizeItem={resizeItem}
-                        toggleItem={toggleItem}
-                      />
-                    )}
-                  </Draggable>
-                ))}
-                {droppableProvided.placeholder}
-              </div>
-            )}
-          </Droppable>
-        </DragDropContext>
+        <div
+          className={cn(
+            'grid items-start gap-3 transition-colors',
+            desktopColumns === 3 && 'grid-cols-1 md:grid-cols-2 xl:grid-cols-3',
+          )}
+          style={gridStyle}
+        >
+          {orderedItems.map((item) => (
+            <AdaptiveGridItem
+              key={item.id}
+              item={item}
+              isEditing={isEditing}
+              resizeItem={resizeItem}
+              toggleItem={toggleItem}
+            />
+          ))}
+        </div>
       </div>
     </TooltipProvider>
   );

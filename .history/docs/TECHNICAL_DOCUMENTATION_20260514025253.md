@@ -1,31 +1,9 @@
+# Техническая документация приложения `base44`
 
 Дата фиксации: `2026-05-14`  
 Каталог проекта: `d:\WORK\base44`
 
-<!-- begin:toc -->
-## Содержание
-
-Для удобства навигации приведено оглавление с ссылками на основные разделы:
-
-1. [Назначение приложения](#section-1)
-2. [Технологический стек](#section-2)
-3. [Структура репозитория](#section-3)
-4. [Архитектура приложения](#section-4)
-5. [Основные бизнес‑модули](#section-5)
-6. [Аутентификация и авторизация](#section-6)
-7. [Модель данных](#section-7)
-8. [Конфигурация и переменные окружения](#section-8)
-9. [Локальный запуск](#section-9)
-10. [API и контракты](#section-10)
-11. [Известные расхождения и риски](#section-11)
-12. [Рекомендации по стабилизации](#section-12)
-
-**Меню:**  
-[Стек](#section-2) • [Архитектура](#section-4) • [Бизнес‑модули](#section-5) • [Юнит‑экономика](#section-5-3) • [Pipeline](#section-5-4) • [Конфигурация](#section-8) • [API](#section-10)
-
-<!-- end:toc -->
-
-## 1. Назначение приложения <a name="section-1"></a>
+## 1. Назначение приложения
 
 `base44` — веб-приложение для управления юнит-экономикой и аналитикой товаров (фокус на Wildberries) с модулями:
 
@@ -34,7 +12,7 @@
 - аналитика и алерты;
 - административная панель (прогоны сбора, snapshots, ошибки, подписки).
 
-## 2. Технологический стек <a name="section-2"></a>
+## 2. Технологический стек
 
 ### Frontend
 
@@ -58,7 +36,7 @@
 - Docker + Docker Compose
 - Nginx reverse proxy
 
-## 3. Структура репозитория <a name="section-3"></a>
+## 3. Структура репозитория
 
 ```text
 backend/        # локальный API + worker
@@ -68,7 +46,7 @@ entities/       # JSON-схемы сущностей (Base44)
 docs/           # документация
 ```
 
-## 4. Архитектура приложения <a name="section-4"></a>
+## 4. Архитектура приложения
 
 ## 4.1 Frontend
 
@@ -133,48 +111,19 @@ docs/           # документация
 ### В браузере (frontend runtime)
 
 - `BackgroundSyncService`:
-  - синхронизация логистических справочников (первый запуск через 30 сек, затем каждый час);
-  - синхронизация активных товаров (первый запуск через 1 мин, затем каждые 15 мин);
+  - синхронизация логистических справочников;
+  - синхронизация активных товаров;
   - запуск `SyncScheduler`.
 - `SyncScheduler`:
-  - периодическая синхронизация (default 30 мин);
-  - получение клиентов с wb_api_token;
-  - синхронизация продаж за последние 7 дней через WB Statistic API;
-  - параллельная загрузка актуальных цен и складских остатков;
+  - периодический вызов `WildberriesSync.syncAll()`;
   - хранит логи в `localStorage`.
 
 ### На сервере
 
 - `backend/src/worker.js` обрабатывает BullMQ очередь `base44-jobs`.
-- Реализованные обработчики:
-  - `wb:collect:product` - сбор данных товара с WB API;
-  - `sync-client` - синхронизация клиента;
-  - `sync-project` - синхронизация проекта;
-  - `sync-product` - синхронизация товара.
-- Broadcast scheduler:
-  - проверка due broadcast schedules каждую минуту;
-  - выполнение автоматических рассылок (daily, weekly, subscription_expiring);
-  - обновление next_run_at для следующей итерации.
+- Реализованы stub-обработчики: `sync-client`, `sync-project`, `sync-product`.
 
-### Схема архитектуры
-
-Приведенная ниже диаграмма иллюстрирует общую архитектуру приложения: взаимодействие пользователя с фронтендом, связь фронтенда и API, использование базы данных и очереди, а также работу фонового воркера.
-
-```mermaid
-graph TD
-    User((User))
-    Frontend[React Frontend]
-    Backend[Express API]
-    Database[(PostgreSQL)]
-    Queue[Redis + BullMQ]
-    Worker[Background Worker]
-    User --> Frontend --> Backend
-    Backend --> Database
-    Backend --> Queue
-    Queue --> Worker --> Database
-```
-
-## 5. Основные бизнес‑модули <a name="section-5"></a>
+## 5. Основные бизнес-модули
 
 ## 5.1 Административная панель
 
@@ -224,8 +173,6 @@ graph TD
 - Автоматическое сохранение изменений
 
 ## 5.2 Синхронизация данных Wildberries
-
-> **Примечание:** Для понимания расчётов логистики и комиссий, которые используются при синхронизации, см. также раздел [Юнит‑экономика](#section-5-3).
 
 Файлы:
 - `backend/src/wildberries-routes.js` - API endpoints
@@ -301,7 +248,7 @@ graph TD
   - FBO → kgvpMarketplace
 - Извлечение комиссии: commission_by_model > commission_pct
 
-## 5.3 Юнит‑экономика <a name="section-5-3"></a>
+## 5.3 Юнит-экономика
 
 Файл: `src/lib/unitEconomics.js`
 
@@ -379,7 +326,7 @@ SensitivityChart:
 - Множественные вызовы calculate для построения кривой
 - Recharts LineChart показывает влияние параметра на прибыль
 
-## 5.4 Collection Runner (админский pipeline) <a name="section-5-4"></a>
+## 5.4 Collection Runner (админский pipeline)
 
 Файл: `src/lib/CollectionRunPipelineService.js`
 
@@ -394,15 +341,6 @@ SensitivityChart:
 7. `calculate-unit-economics` - расчёт юнит-экономики
 8. `verify-results` - верификация результатов
 9. `build-report` - построение отчёта
-
-#### Схема pipeline
-
-Следующая блок‑схема показывает последовательность этапов pipeline:
-
-```mermaid
-flowchart LR
-    A[validate-input] --> B[collect-marketplace-data] --> C[normalize-events] --> D[save-raw-frames] --> E[save-events] --> F[update-snapshots] --> G[calculate-unit-economics] --> H[verify-results] --> I[build-report]
-```
 
 Runner управляется через UI:
 
@@ -423,19 +361,7 @@ Runner управляется через UI:
 - `standard_plus`
 - `maximum`
 
-### Сводная таблица модулей
-
-| Модуль | Ключевые файлы | Назначение |
-|---|---|---|
-| **Административная панель** | `Admin.jsx`, `AdminOverview.jsx`, `AdminBroadcasts.jsx`, `AdminCollectionRunner.jsx`, `AdminDashboardGrid.jsx` | Управление системой: метрики, рассылки, запуск сбора данных и настраиваемая сетка виджетов |
-| **Синхронизация Wildberries** | `wildberries-routes.js`, `wildberries-public-api.js`, `wildberries-seller-api.js`, `wildberries-repository.js`, `WildberriesSync.js`, `LogisticsService.js`, `CommissionService.js` | Сбор и обновление данных о товарах, логистических направлениях и комиссиях через API Wildberries |
-| **Юнит‑экономика** | `unitEconomics.js`, `Calculator.jsx` | Расчёт себестоимости, налогов, валовой прибыли, contribution margin и точки безубыточности |
-| **Collection Runner** | `CollectionRunPipelineService.js` | Реализация ETL‑pipeline ingestion и расчётов (см. схему выше) |
-| **Подписки и фичи** | `subscriptionService.js`, `initSubscriptions.js` | Управление тарифами, подписками и дополнительными возможностями пользователей |
-
-Каждая из этих групп подробно описана в соответствующих подразделах раздела&nbsp;5.
-
-## 6. Аутентификация и авторизация <a name="section-6"></a>
+## 6. Аутентификация и авторизация
 
 Файлы:
 - `backend/src/auth.js` - JWT функции и middleware
@@ -509,7 +435,7 @@ Generic CRUD маршруты:
 - INSERT/UPDATE app_users с role='admin'
 - Используется для первоначальной настройки системы
 
-## 7. Модель данных <a name="section-7"></a>
+## 7. Модель данных
 
 Сущности (папка `entities/` + backend definitions):
 
@@ -518,32 +444,20 @@ Generic CRUD маршруты:
 - `ProductSnapshot`, `SellerSnapshot`, `UnitEconomicsSnapshot`
 - `IngestionRun`, `DeadLetter`, `SyncCursor`
 - `SalesData`, `PriceHistory`, `LogisticsDirectory`
-- `LogisticsDirectory` - справочники логистики (ПВЗ, склады, тарифы)
-- `MarketplaceCommissionDirectory` - справочники комиссий по категориям
 - `Subscription`, `Feature`, `UserSubscription`
 - `User` (описан в backend schema)
-- `app_users` - таблица пользователей с полями: id, email, full_name, role, password_hash, created_date, updated_date
-- `user_activity` - отслеживание активности пользователей (session_id, path, last_seen_at)
-- `admin_broadcasts` - рассылки пользователям (title, body, audience, category, status)
-- `broadcast_schedules` - расписания автоматических рассылок (cadence, next_run_at, last_run_at)
-- `user_messages` - сообщения пользователей в inbox
-- `admin_metric_snapshots` - снапшоты системных метрик (cpu_load_pct, memory_used_bytes)
-- `wb_jobs` - задачи BullMQ для синхронизации WB (status, progress, result)
 
 Группы данных:
 
 - Core business: клиенты/проекты/товары/расчеты
 - Ingestion/ETL: raw frames, events, runs, dead letters, cursors
 - Analytics snapshots: product/seller/unit snapshots
-- Commerce support: sales/price/logistics/commission directories
+- Commerce support: sales/price/logistics
 - Access/billing: users/subscriptions/features
-- Admin: broadcasts, schedules, user messages, metric snapshots
-- Activity: user_activity для отслеживания онлайн пользователей
-- Jobs: wb_jobs для BullMQ очереди
 
-## 8. Конфигурация и переменные окружения <a name="section-8"></a>
+## 7. Конфигурация и переменные окружения
 
-## 8.1 Frontend (`.env.local`)
+## 7.1 Frontend (`.env.local`)
 
 - `VITE_BASE44_APP_ID`
 - `VITE_BASE44_APP_BASE_URL`
@@ -551,7 +465,7 @@ Generic CRUD маршруты:
 - `BASE44_LEGACY_SDK_IMPORTS` (`true|false`)
 - `VITE_CACHE_DIR` (опционально, для Vite)
 
-## 8.2 Backend
+## 7.2 Backend
 
 - `PORT` (default `3000`)
 - `DATABASE_URL` (или `POSTGRES_*`)
@@ -562,42 +476,17 @@ Generic CRUD маршруты:
 - `CORS_ORIGIN`
 - `ALLOW_ROLE_OVERRIDE`
 - `NODE_ENV`
-- `WB_SELLER_API_TIMEOUT_MS` (default `15000`)
-- `BROADCAST_SCHEDULER_INTERVAL_MS` (default `60000`)
 
-### Таблица переменных окружения
+## 8. Локальный запуск
 
-| Категория | Переменная | Описание |
-|---|---|---|
-| **Frontend** | `VITE_BASE44_APP_ID` | Идентификатор приложения |
-| **Frontend** | `VITE_BASE44_APP_BASE_URL` | Базовый URL для фронтенда |
-| **Frontend** | `VITE_BASE44_FUNCTIONS_VERSION` | Версия функций (опционально) |
-| **Frontend** | `BASE44_LEGACY_SDK_IMPORTS` | Разрешить импорт устаревшего SDK (`true`/`false`) |
-| **Frontend** | `VITE_CACHE_DIR` | Каталог кэша для Vite (опционально) |
-| **Backend** | `PORT` | Порт API сервера (по умолчанию&nbsp;3000) |
-| **Backend** | `DATABASE_URL` / `POSTGRES_*` | Параметры подключения к PostgreSQL |
-| **Backend** | `REDIS_URL` | URL сервера Redis |
-| **Backend** | `JWT_SECRET` | Секретный ключ для подписи JWT |
-| **Backend** | `JWT_EXPIRES_IN` | Время жизни токена |
-| **Backend** | `AUTH_COOKIE_NAME` | Имя cookie для авторизации |
-| **Backend** | `CORS_ORIGIN` | Разрешённые источники CORS |
-| **Backend** | `ALLOW_ROLE_OVERRIDE` | Возможность переопределения роли |
-| **Backend** | `NODE_ENV` | Среда запуска (`production`/`development`) |
-| **Backend** | `WB_SELLER_API_TIMEOUT_MS` | Таймаут для Seller&nbsp;API (мс) |
-| **Backend** | `BROADCAST_SCHEDULER_INTERVAL_MS` | Интервал планировщика рассылок (мс) |
-
-Эта таблица дублирует информацию из списков выше в компактном виде и помогает быстрее найти нужную переменную.
-
-## 9. Локальный запуск <a name="section-9"></a>
-
-## 9.1 Frontend
+## 8.1 Frontend
 
 ```bash
 npm install
 npm run dev
 ```
 
-## 9.2 Backend
+## 8.2 Backend
 
 ```bash
 cd backend
@@ -605,7 +494,7 @@ npm install
 npm run dev
 ```
 
-## 9.3 Полный стек через Docker
+## 8.3 Полный стек через Docker
 
 ```bash
 docker compose up --build
@@ -620,7 +509,7 @@ docker compose up --build
 - `redis`
 - `nginx`
 
-## 10. API и контракты <a name="section-10"></a>
+## 9. API и контракты
 
 Локальный backend публикует:
 
@@ -637,19 +526,7 @@ Entity API типовой:
 - `PUT /entities/<Entity>/:id`
 - `DELETE /entities/<Entity>/:id`
 
-Wildberries API endpoints:
-
-- `POST /wildberries/products/:productId/sync` - синхронизация товара
-- `POST /wildberries/clients/:clientId/logistics-directions/sync` - синхронизация справочника логистики
-- `POST /wildberries/clients/:clientId/commission-directory/sync` - синхронизация справочника комиссий
-
-Admin API endpoints:
-
-- `GET /admin/metrics` - получение системных метрик
-- `POST /activity/heartbeat` - отправка heartbeat активности пользователя
-- `POST /admin/broadcasts` - создание рассылки
-
-## 11. Известные расхождения и риски <a name="section-11"></a>
+## 10. Известные расхождения и риски
 
 Ниже перечислены фактические несоответствия, обнаруженные в кодовой базе:
 
@@ -660,11 +537,8 @@ Admin API endpoints:
 5. `AdminScheduledTasks` отображает cron-like задачи в UI, но реальный серверный scheduler для этих задач в backend отсутствует.
 6. `SyncScheduler` и часть background-логики используют `localStorage`, то есть состояние живет на клиенте браузера, а не на сервере.
 7. В коде frontend часть функций синхронизации получает внешние данные через `InvokeLLM` (не deterministic источник), это нужно учитывать для production-процессов.
-8. Система heartbeat использует клиентскую отправку данных, что может быть подвержено манипуляциям и не отражает реальную активность при закрытом браузере.
-9. Broadcast scheduler работает в worker процессе, но не имеет механизма обработки ошибок и retry логики для неудачных рассылок.
-10. Справочники логистики и комиссий синхронизируются через Seller API, но нет механизма автоматического обновления при изменении тарифов WB.
 
-## 12. Рекомендации по стабилизации <a name="section-12"></a>
+## 11. Рекомендации по стабилизации
 
 1. Унифицировать ingestion API: выбрать один контракт (`/api/...` или `/functions/...`) и привести админ-документацию/UI к нему.
 2. Перенести критические планировщики из браузера в backend worker/scheduler.
@@ -673,8 +547,4 @@ Admin API endpoints:
 5. Разделить в документации и UI:
    - production pipeline с реальными интеграциями;
    - demo/mock сценарии.
-6. Реализовать серверную систему heartbeat с валидацией session_id для более точного отслеживания активности.
-7. Добавить механизм retry и обработки ошибок для broadcast scheduler.
-8. Реализовать автоматическое обновление справочников логистики и комиссий по расписанию или при изменении тарифов WB.
-9. Добавить мониторинг и алерты для BullMQ очереди и worker процессов.
-10. Реализовать централизованное хранение логов синхронизации на сервере вместо localStorage.
+

@@ -230,7 +230,6 @@ export default function CostInputsGrid({ form, setField, selectedProduct = null,
         color="bg-purple-100 text-purple-600"
         collapsed={collapsedSections.marketing}
         onToggle={toggleSection}
-        className=""
       >
         <NumField label="Доля платного трафика" value={form.paid_share_pct} onChange={v => setField('paid_share_pct', v)} suffix="%" step="0.1" />
         <NumField label="CAC / платный заказ"   value={form.cac}            onChange={v => setField('cac', v)} />

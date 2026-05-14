@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { Box, ChevronDown, Megaphone, Minus, RefreshCw, ShieldCheck, Truck } from 'lucide-react';
-import LogisticsSelector from './LogisticsSelector';
-import { calculateLogisticsCost, clearTariffCache } from '@/lib/LogisticsService';
+import LogisticsDirectionSelector from './LogisticsDirectionSelector';
+import PickupPointSelector from './PickupPointSelector';
+import { calculateLogisticsCost, clearTariffCache, getTariffs } from '@/lib/LogisticsService';
 import { syncLogisticsDirectory, syncWbCommissionDirectory } from '@/lib/MarketplaceAPI';
 import { cn } from '@/lib/utils';
 
@@ -174,7 +175,6 @@ export default function CostInputsGrid({ form, setField, selectedProduct = null,
         color="bg-blue-100 text-blue-600"
         collapsed={collapsedSections.logistics}
         onToggle={toggleSection}
-        className=""
         action={(
           <button
             type="button"
@@ -188,16 +188,27 @@ export default function CostInputsGrid({ form, setField, selectedProduct = null,
         )}
       >
         <div className="mb-2 pb-2 border-b border-border/40 space-y-2">
-          <LogisticsSelector
+          <LogisticsDirectionSelector
             direction={form.logistics_direction || 'moscow'}
-            pickupPoint={form.pickup_point}
             fulfillmentMode={form.fulfillment_mode}
             onDirectionChange={handleDirectionChange}
             onTariffsLoad={handleTariffsLoad}
-            onPointChange={(pointId, _point) => {
-              setField('pickup_point', pointId);
-            }}
             product={selectedProduct}
+            directoriesMap={effectiveDirectoriesMap}
+          />
+          <PickupPointSelector
+            selectedPoint={form.pickup_point}
+            onPointChange={(pointId, point) => {
+              setField('pickup_point', pointId);
+              if (point?.directionId) {
+                setField('logistics_direction', point.directionId);
+                handleTariffsLoad(
+                  getTariffs(point.directionId, form.fulfillment_mode, effectiveDirectoriesMap),
+                  point.directionId,
+                );
+              }
+            }}
+            fulfillmentMode={form.fulfillment_mode}
             directoriesMap={effectiveDirectoriesMap}
           />
           {syncMutation.isError && (
@@ -230,7 +241,6 @@ export default function CostInputsGrid({ form, setField, selectedProduct = null,
         color="bg-purple-100 text-purple-600"
         collapsed={collapsedSections.marketing}
         onToggle={toggleSection}
-        className=""
       >
         <NumField label="Доля платного трафика" value={form.paid_share_pct} onChange={v => setField('paid_share_pct', v)} suffix="%" step="0.1" />
         <NumField label="CAC / платный заказ"   value={form.cac}            onChange={v => setField('cac', v)} />
