@@ -2,11 +2,14 @@ import { useState, useCallback, useEffect, useMemo, useRef } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
 import { base44 } from '@/api/base44Client';
+import { useAuth } from '@/lib/AuthContext';
 import { calculate } from '@/lib/unitEconomics';
+import { buildCalculatorAdvice } from '@/lib/calculatorAdvice';
 import { calculateBoxesPerPallet } from '@/lib/LogisticsService';
 import { applyFulfillmentModeSeed, buildCalculatorSeed } from '@/lib/calculatorSeed';
 import { loadCalculatorDraft, removeCalculatorDraft, saveCalculatorDraft } from '@/lib/calculatorDraftStorage';
 import { buildCalculationPayload } from '@/lib/calculationPayload';
+import { consumeCalculatorIntroPending, shouldStartCalculatorIntro } from '@/lib/onboarding';
 import { FilePlus2, Package, RotateCcw, Save } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
@@ -15,6 +18,7 @@ import AdaptiveDashboardGrid from '@/components/layout/AdaptiveDashboardGrid.jsx
 import ProductHeader from '@/components/calculator/ProductHeader.jsx';
 import DimensionsBox from '@/components/calculator/DimensionsBox';
 import CostInputsGrid from '@/components/calculator/CostInputsGrid';
+import ProfitabilityAdvicePanel from '@/components/calculator/ProfitabilityAdvicePanel.jsx';
 import MarketplaceDataSync from '@/components/calculator/MarketplaceDataSync';
 import FinancialSummary from '@/components/calculator/FinancialSummary';
 import UnitEconomicsPanel from '@/components/calculator/UnitEconomicsPanel';
@@ -27,6 +31,7 @@ import ProfitStructureChart from '@/components/calculator/ProfitStructureChart.j
 import CompetitorPriceBlock from '@/components/calculator/CompetitorPriceBlock';
 import InteractiveProfitChart from '@/components/calculator/InteractiveProfitChart';
 import PriceHistoryChart from '@/components/calculator/PriceHistoryChart';
+import SpotlightTour from '@/components/onboarding/SpotlightTour.jsx';
 
 const DEFAULT_FORM = {
   fulfillment_mode:    'FBO',
@@ -73,6 +78,18 @@ const DEFAULT_FORM = {
   wb_total_net_profit_rub: 0,
 };
 
+const LOGISTICS_RESEED_FIELDS = new Set([
+  'fulfillment_mode',
+  'package_mode',
+  'wb_pallet_type',
+  'wb_boxes_per_pallet',
+  'size_length_cm',
+  'size_width_cm',
+  'size_height_cm',
+  'weight_kg',
+  'logistics_direction',
+]);
+
 const makeVersion = (name = 'Версия 1', form = DEFAULT_FORM) => ({ name, form });
 const makeProductVersion = (product, form) => makeVersion(product?.name?.slice(0, 20) || 'Версия 1', form);
 
@@ -83,14 +100,90 @@ const formatDraftSavedAt = (savedAt) => {
   return date.toLocaleString('ru-RU', { dateStyle: 'short', timeStyle: 'short' });
 };
 
+const CALCULATOR_TOUR_STEPS = [
+  {
+    selector: '[data-tour-target="calculator-header"]',
+    title: 'Верхняя панель расчета',
+    description: 'Здесь переключаются версии расчета, создаются копии сценариев, сохраняется активная версия и выгружается результат.',
+  },
+  {
+    selector: '[data-tour-target="calculator-layout"]',
+    title: 'Компоновка калькулятора',
+    description: 'Кнопка настройки включает управление шириной модулей и сворачиванием блоков, чтобы собрать удобный рабочий экран.',
+  },
+  {
+    selector: '[data-calculator-grid-item="product-context"]',
+    title: 'Товар и параметры',
+    description: 'Блок связывает расчет с товаром, подтягивает данные маркетплейса, хранит габариты, вес и режим упаковки.',
+  },
+  {
+    selector: '[data-calculator-grid-item="financial-summary"]',
+    title: 'Ключевые KPI',
+    description: 'Краткая сводка показывает прибыль, маржу, точку безубыточности и основные сигналы по текущему расчету.',
+  },
+  {
+    selector: '[data-calculator-grid-item="cost-inputs"]',
+    title: 'Параметры расчета',
+    description: 'Здесь вводятся цена, комиссии, налоги, себестоимость, логистика, реклама и другие исходные значения.',
+  },
+  {
+    selector: '[data-calculator-grid-item="profitability-advice"]',
+    title: 'Подсказки прибыльности',
+    description: 'Блок собирает рекомендации по слабым местам расчета и показывает, какие параметры стоит проверить в первую очередь.',
+  },
+  {
+    selector: '[data-calculator-grid-item="cost-breakdown"]',
+    title: 'Структура затрат',
+    description: 'Диаграмма помогает увидеть, какие статьи сильнее всего забирают выручку и где есть потенциал оптимизации.',
+  },
+  {
+    selector: '[data-calculator-grid-item="profit-structure"]',
+    title: 'Структура прибыли',
+    description: 'Блок раскладывает движение от цены продажи до итоговой прибыли по ключевым этапам расчета.',
+  },
+  {
+    selector: '[data-calculator-grid-item="unit-economics"]',
+    title: 'Юнит-экономика',
+    description: 'Подробные метрики на единицу товара показывают вклад каждой переменной в прибыльность и окупаемость.',
+  },
+  {
+    selector: '[data-calculator-grid-item="wb-report"]',
+    title: 'WB отчет',
+    description: 'Раздел сопоставляет расчет с фактическими данными Wildberries: продажами, возвратами, логистикой и выплатами.',
+  },
+  {
+    selector: '[data-calculator-grid-item="price-history"]',
+    title: 'История цен',
+    description: 'График показывает динамику цены выбранного товара и помогает сверять текущий сценарий с прошлой ценовой политикой.',
+  },
+  {
+    selector: '[data-calculator-grid-item="interactive-profit"]',
+    title: 'Влияние параметров',
+    description: 'Интерактивный график показывает, как изменение выбранных параметров влияет на прибыль и запас прочности.',
+  },
+  {
+    selector: '[data-calculator-grid-item="competitor-prices"]',
+    title: 'Цены конкурентов',
+    description: 'Блок помогает сравнить вашу цену с рынком и оценить, насколько выбранная стратегия конкурентоспособна.',
+  },
+  {
+    selector: '[data-calculator-grid-item="sensitivity"]',
+    title: 'Чувствительность',
+    description: 'Раздел показывает, какие входные параметры сильнее всего меняют итоговую экономику товара.',
+  },
+];
+
 export default function Calculator() {
   const queryClient = useQueryClient();
   const navigate = useNavigate();
+  const { user, completeOnboardingTour } = useAuth();
   const [versions,  setVersions]  = useState([makeVersion()]);
   const [activeIdx, setActiveIdx] = useState(0);
   const [selectedProduct, setSelectedProduct] = useState(null);
   const [draftPrompt, setDraftPrompt] = useState(null);
   const [leavePrompt, setLeavePrompt] = useState(null);
+  const [isCalculatorTourOpen, setIsCalculatorTourOpen] = useState(false);
+  const [isSavingTourState, setIsSavingTourState] = useState(false);
   const lastSeedSignature = useRef('');
   const restoredDraftProductId = useRef(null);
   const autoSelectedProductId = useRef('');
@@ -156,17 +249,19 @@ export default function Calculator() {
     return bySource;
   }, [logisticsDirectories]);
   const setField = useCallback((k, val) => setForm(prev => {
-    if (k !== 'fulfillment_mode') return { ...prev, [k]: val };
+    if (!LOGISTICS_RESEED_FIELDS.has(k)) return { ...prev, [k]: val };
+    const nextForm = { ...prev, [k]: val };
     return applyFulfillmentModeSeed({
-      form: { ...prev, fulfillment_mode: val },
+      form: nextForm,
       product: selectedProduct,
-      fulfillmentMode: val,
+      fulfillmentMode: nextForm.fulfillment_mode,
       commissionDirectories,
       logisticsDirectoriesMap: directoriesMap,
     });
   }), [setForm, selectedProduct, commissionDirectories, directoriesMap]);
 
-  const result = calculate(form);
+  const result = useMemo(() => calculate(form), [form]);
+  const advice = useMemo(() => buildCalculatorAdvice(form, result), [form, result]);
   const versionsWithResult = versions.map(v => ({ ...v, result: calculate(v.form) }));
   const productMap = useMemo(() => Object.fromEntries(products.map(p => [p.id, p])), [products]);
   const projectMap = useMemo(() => Object.fromEntries(projects.map(p => [p.id, p])), [projects]);
@@ -480,6 +575,29 @@ export default function Calculator() {
     continueAfterLeavePrompt(action);
   };
 
+  useEffect(() => {
+    if (!user || !shouldStartCalculatorIntro(user)) return;
+    if (consumeCalculatorIntroPending()) {
+      setIsCalculatorTourOpen(true);
+    }
+  }, [user]);
+
+  const finishCalculatorTour = useCallback(async (status) => {
+    setIsSavingTourState(true);
+    try {
+      await completeOnboardingTour(status);
+      setIsCalculatorTourOpen(false);
+    } catch (error) {
+      toast({
+        title: 'Обучение не сохранено',
+        description: error?.message || 'Попробуйте завершить или пропустить обучение ещё раз.',
+        variant: 'destructive',
+      });
+    } finally {
+      setIsSavingTourState(false);
+    }
+  }, [completeOnboardingTour]);
+
   const draftSavedAtLabel = formatDraftSavedAt(draftPrompt?.draft?.savedAt);
   const leavePromptIsProductSwitch = leavePrompt?.action?.type === 'product';
 
@@ -538,6 +656,7 @@ export default function Calculator() {
             onSelect={handleSelectProduct}
             form={form}
             setField={setField}
+            fieldHints={advice.fieldHints}
           />
 
           <DimensionsBox
@@ -572,8 +691,16 @@ export default function Calculator() {
           selectedProduct={selectedProduct}
           selectedClientId={selectedClientId}
           directoriesMap={directoriesMap}
+          fieldHints={advice.fieldHints}
         />
       ),
+    },
+    {
+      id: 'profitability-advice',
+      title: 'Подсказки прибыльности',
+      defaultSpan: 1,
+      allowedSpans: [1, 2, 3, 'full'],
+      children: <ProfitabilityAdvicePanel advice={advice} setField={setField} />,
     },
     {
       id: 'cost-breakdown',
@@ -632,6 +759,7 @@ export default function Calculator() {
       children: <SensitivityChart form={form} />,
     },
   ], [
+    advice,
     directoriesMap,
     form,
     handleSelectProduct,
@@ -646,7 +774,11 @@ export default function Calculator() {
     <div className="p-3 lg:p-4 max-w-[1600px] mx-auto flex flex-col">
 
       {/* ── Строка заголовка ── */}
-      <div className="grid grid-cols-1 lg:grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-3 flex-shrink-0" style={{ marginBottom: '12px' }}>
+      <div
+        data-tour-target="calculator-header"
+        className="grid grid-cols-1 lg:grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-3 flex-shrink-0"
+        style={{ marginBottom: '12px' }}
+      >
         <div className="min-w-0">
           <h1 className="text-[17px] font-semibold tracking-tight text-foreground leading-tight">Калькулятор юнит-экономики</h1>
           <p className="text-[11px] text-muted-foreground">Расчёт прибыльности товара на Wildberries · FBO / FBS</p>
@@ -681,6 +813,15 @@ export default function Calculator() {
         title="Компоновка калькулятора"
         minColumnWidth={320}
         desktopColumns={3}
+        toolbarTourTarget="calculator-layout"
+      />
+
+      <SpotlightTour
+        steps={CALCULATOR_TOUR_STEPS}
+        open={isCalculatorTourOpen}
+        onComplete={() => finishCalculatorTour('completed')}
+        onSkip={() => finishCalculatorTour('skipped')}
+        isBusy={isSavingTourState}
       />
 
       <Dialog open={Boolean(draftPrompt)} onOpenChange={(open) => { if (!open) setDraftPrompt(null); }}>

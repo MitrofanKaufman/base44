@@ -12,6 +12,111 @@ const toNumber = (value) => {
 
 const roundMoney = (value) => Math.round(value * 100) / 100;
 
+const normalizeFulfillmentMode = (mode) => (mode === 'FBS' ? 'FBS' : 'FBO');
+
+const normalizePackageMode = (mode) => (mode === 'pallet' ? 'pallet' : 'box');
+
+const pickFirst = (...values) => {
+  for (const value of values) {
+    if (value !== undefined && value !== null && value !== '') return value;
+  }
+  return undefined;
+};
+
+const isObject = (value) => value && typeof value === 'object' && !Array.isArray(value);
+
+const isTariffLeaf = (value) => (
+  isObject(value)
+  && (
+    value.base !== undefined
+    || value.per_kg !== undefined
+    || value.perKg !== undefined
+    || value.per_liter !== undefined
+    || value.perLiter !== undefined
+    || value.storage !== undefined
+    || value.boxDeliveryBase !== undefined
+    || value.boxDeliveryMarketplaceBase !== undefined
+    || value.palletDeliveryValueBase !== undefined
+    || value.boxStorageBase !== undefined
+    || value.palletStorageValueExpr !== undefined
+  )
+);
+
+const normalizeTariff = (tariff, source, packageMode) => {
+  const isPallet = packageMode === 'pallet';
+  const hasPerUnitPalletValue = isPallet && (
+    tariff?.palletDeliveryValueBase !== undefined
+    || tariff?.palletDeliveryValueLiter !== undefined
+  );
+
+  return {
+    base: toNumber(pickFirst(
+      tariff?.base,
+      tariff?.base_rub,
+      tariff?.baseRub,
+      isPallet ? tariff?.palletDeliveryValueBase : undefined,
+      !isPallet ? tariff?.boxDeliveryBase : undefined,
+      !isPallet ? tariff?.boxDeliveryMarketplaceBase : undefined,
+    )),
+    per_kg: toNumber(pickFirst(tariff?.per_kg, tariff?.perKg)),
+    per_liter: toNumber(pickFirst(
+      tariff?.per_liter,
+      tariff?.perLiter,
+      isPallet ? tariff?.palletDeliveryValueLiter : undefined,
+      !isPallet ? tariff?.boxDeliveryLiter : undefined,
+      !isPallet ? tariff?.boxDeliveryMarketplaceLiter : undefined,
+    )),
+    storage: toNumber(pickFirst(
+      tariff?.storage,
+      tariff?.storage_rub,
+      tariff?.storageRub,
+      isPallet ? tariff?.palletStorageValueExpr : undefined,
+    )),
+    storage_base: toNumber(pickFirst(
+      tariff?.storage_base,
+      tariff?.storageBase,
+      !isPallet ? tariff?.boxStorageBase : undefined,
+    )),
+    storage_per_liter: toNumber(pickFirst(
+      tariff?.storage_per_liter,
+      tariff?.storagePerLiter,
+      !isPallet ? tariff?.boxStorageLiter : undefined,
+    )),
+    source,
+    packageMode,
+    allocation: pickFirst(tariff?.allocation, tariff?.allocation_basis, tariff?.allocationBasis)
+      || (hasPerUnitPalletValue ? 'unit' : 'package'),
+  };
+};
+
+const resolveTariffVariant = (tariffs, mode, packageMode, palletType) => {
+  if (!isObject(tariffs)) return null;
+
+  const modeTariffs = tariffs[mode];
+  const packageTariffs = tariffs[packageMode];
+  const modePackageKey = `${mode}_${packageMode}`;
+  const lowerModePackageKey = `${mode.toLowerCase()}_${packageMode}`;
+  const packageModeKey = `${packageMode}_${mode}`;
+  const lowerPackageModeKey = `${packageMode}_${mode.toLowerCase()}`;
+  const candidates = [
+    modeTariffs?.[packageMode]?.[palletType],
+    modeTariffs?.[packageMode],
+    packageTariffs?.[mode]?.[palletType],
+    packageTariffs?.[mode],
+    tariffs[modePackageKey]?.[palletType],
+    tariffs[modePackageKey],
+    tariffs[lowerModePackageKey]?.[palletType],
+    tariffs[lowerModePackageKey],
+    tariffs[packageModeKey]?.[palletType],
+    tariffs[packageModeKey],
+    tariffs[lowerPackageModeKey]?.[palletType],
+    tariffs[lowerPackageModeKey],
+    modeTariffs,
+  ];
+
+  return candidates.find(isTariffLeaf) || null;
+};
+
 // Стандартные размеры европаллеты и плановая высота загруженной паллеты.
 const STANDARD_PALLET_DIMENSIONS = {
   length_cm: 120,
@@ -77,23 +182,29 @@ export function getBillableWeightKg(product = {}) {
  * @param {object} directoriesMap - справочники из БД {source: {direction_id: {...}}}
  * @returns {object} - {base, per_kg, storage}
  */
-export function getTariffs(direction, mode, directoriesMap = {}) {
+export function getTariffs(direction, mode, directoriesMap = {}, options = {}) {
+  const normalizedMode = normalizeFulfillmentMode(mode);
+  const optionBag = typeof options === 'object' && options
+    ? /** @type {Record<string, any>} */ (options)
+    : {};
+  const packageMode = normalizePackageMode(
+    typeof options === 'string'
+      ? options
+      : pickFirst(optionBag.packageMode, optionBag.package_mode, optionBag.wbTariffMode, optionBag.wb_tariff_mode),
+  );
+  const palletType = pickFirst(optionBag.palletType, optionBag.pallet_type, optionBag.wbPalletType, optionBag.wb_pallet_type);
+
   // Поиск в справочниках WB
   const wbDir = (directoriesMap.wildberries || []).find(
     d => d.direction_id === direction
   );
+  const tariffVariant = resolveTariffVariant(wbDir?.tariffs, normalizedMode, packageMode, palletType);
 
-  if (wbDir?.tariffs?.[mode]) {
-    const tariff = {
-      base: wbDir.tariffs[mode].base,
-      per_kg: wbDir.tariffs[mode].per_kg,
-      storage: wbDir.tariffs[mode].storage,
-      source: 'wildberries'
-    };
-    return tariff;
+  if (tariffVariant) {
+    return normalizeTariff(tariffVariant, 'wildberries', packageMode);
   }
 
-  const cacheKey = `${direction}_${mode}_default`;
+  const cacheKey = `${direction}_${normalizedMode}_${packageMode}_default`;
   if (TARIFF_CACHE[cacheKey]) {
     return TARIFF_CACHE[cacheKey];
   }
@@ -104,7 +215,10 @@ export function getTariffs(direction, mode, directoriesMap = {}) {
     'FBS': { base: 30, per_kg: 0.8, storage: 5, source: 'default' }
   };
 
-  const tariff = defaults[mode] || defaults['FBO'];
+  const tariff = {
+    ...(defaults[normalizedMode] || defaults['FBO']),
+    packageMode,
+  };
   TARIFF_CACHE[cacheKey] = tariff;
   return tariff;
 }
@@ -118,23 +232,44 @@ export function getTariffs(direction, mode, directoriesMap = {}) {
  * @returns {object} - разбор затрат: {base, weight, total}
  */
 export function calculateLogisticsCost(product, mode, direction, directoriesMap = {}) {
-  const tariffs = getTariffs(direction, mode, directoriesMap);
+  const packageMode = normalizePackageMode(
+    pickFirst(product?.package_mode, product?.packageMode, product?.wb_tariff_mode, product?.wbTariffMode),
+  );
+  const tariffs = getTariffs(direction, mode, directoriesMap, {
+    packageMode,
+    palletType: pickFirst(product?.wb_pallet_type, product?.wbPalletType),
+  });
 
   const weightKg = toNumber(product?.weight_kg ?? product?.weightKg);
   const volumeLiters = getProductVolumeLiters(product);
   const billableWeightKg = getBillableWeightKg(product);
+  const boxesPerPallet = packageMode === 'pallet'
+    ? Math.max(1, Math.floor(toNumber(product?.wb_boxes_per_pallet ?? product?.wbBoxesPerPallet) || calculateBoxesPerPallet(product)))
+    : 1;
+  const tariffBillableWeightKg = packageMode === 'pallet'
+    ? billableWeightKg * boxesPerPallet
+    : billableWeightKg;
   const baseCost = tariffs.base;
-  const weightCost = Math.max(0, billableWeightKg - 0.05) * (tariffs.per_kg || 0); // первые 50г включены в базовую ставку
+  const weightCost = tariffs.per_liter > 0
+    ? Math.max(volumeLiters - 1, 0) * tariffs.per_liter
+    : Math.max(0, tariffBillableWeightKg - 0.05) * (tariffs.per_kg || 0); // первые 50г включены в базовую ставку
+  const storageCost = tariffs.storage_base > 0 || tariffs.storage_per_liter > 0
+    ? tariffs.storage_base + Math.max(volumeLiters - 1, 0) * tariffs.storage_per_liter
+    : tariffs.storage;
+  const allocationFactor = packageMode === 'pallet' && tariffs.allocation !== 'unit' ? boxesPerPallet : 1;
 
   return {
-    base: baseCost,
+    base: roundMoney(baseCost / allocationFactor),
     weightKg,
     volumeLiters,
     billableWeightKg,
-    weight: roundMoney(weightCost),
-    total: roundMoney(baseCost + weightCost),
-    storage: tariffs.storage,
-    source: tariffs.source
+    tariffBillableWeightKg: roundMoney(tariffBillableWeightKg),
+    boxesPerPallet: packageMode === 'pallet' ? boxesPerPallet : undefined,
+    weight: roundMoney(weightCost / allocationFactor),
+    total: roundMoney((baseCost + weightCost) / allocationFactor),
+    storage: roundMoney((storageCost || 0) / allocationFactor),
+    source: tariffs.source,
+    packageMode: tariffs.packageMode || packageMode,
   };
 }
 

@@ -591,6 +591,7 @@ CREATE TABLE IF NOT EXISTS app_users (
   email TEXT NOT NULL UNIQUE,
   full_name TEXT NOT NULL,
   role TEXT NOT NULL CHECK (role IN ('admin', 'user')),
+  onboarding_state JSONB NOT NULL DEFAULT '{}'::jsonb,
   created_date TIMESTAMPTZ NOT NULL DEFAULT now(),
   updated_date TIMESTAMPTZ NOT NULL DEFAULT now(),
   created_by TEXT

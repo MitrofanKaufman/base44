@@ -35,6 +35,15 @@ const schemas = {
     },
     required: ['email', 'password']
   },
+  AuthOnboardingRequest: {
+    type: 'object',
+    properties: {
+      tour_key: { type: 'string', enum: ['calculator_intro'] },
+      version: { type: 'integer', minimum: 1 },
+      status: { type: 'string', enum: ['completed', 'skipped'] }
+    },
+    required: ['tour_key', 'version', 'status']
+  },
   AuthResponse: {
     type: 'object',
     properties: {
@@ -252,6 +261,33 @@ const paths = {
             }
           }
         },
+        401: { description: 'Unauthorized', content: { 'application/json': { schema: { $ref: '#/components/schemas/ErrorResponse' } } } }
+      }
+    }
+  },
+  '/auth/me/onboarding': {
+    patch: {
+      tags: ['Auth'],
+      summary: 'Mark an onboarding tour as completed or skipped',
+      security: authSecurity,
+      requestBody: {
+        required: true,
+        content: {
+          'application/json': {
+            schema: { $ref: '#/components/schemas/AuthOnboardingRequest' }
+          }
+        }
+      },
+      responses: {
+        200: {
+          description: 'Updated current user',
+          content: {
+            'application/json': {
+              schema: { $ref: '#/components/schemas/User' }
+            }
+          }
+        },
+        400: { description: 'Bad request', content: { 'application/json': { schema: { $ref: '#/components/schemas/ErrorResponse' } } } },
         401: { description: 'Unauthorized', content: { 'application/json': { schema: { $ref: '#/components/schemas/ErrorResponse' } } } }
       }
     }

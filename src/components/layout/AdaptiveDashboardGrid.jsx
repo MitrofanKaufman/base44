@@ -302,6 +302,7 @@ export default function AdaptiveDashboardGrid({
   desktopColumns = undefined,
   compactMasonry = true,
   className = undefined,
+  toolbarTourTarget = undefined,
 }) {
   const [isEditing, setIsEditing] = useState(false);
   const [layout, setLayout] = useState(() => readLayout(storageKey, items));
@@ -370,7 +371,10 @@ export default function AdaptiveDashboardGrid({
   return (
     <TooltipProvider delayDuration={150}>
       <div className={cn('space-y-3', className)}>
-        <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-border bg-card px-3 py-2 shadow-warm-sm">
+        <div
+          data-tour-target={toolbarTourTarget}
+          className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-border bg-card px-3 py-2 shadow-warm-sm"
+        >
           <div className="flex min-w-0 items-center gap-2">
             <SlidersHorizontal className="h-4 w-4 text-primary" />
             <span className="text-sm font-semibold text-foreground">{title}</span>

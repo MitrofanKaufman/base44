@@ -2,6 +2,7 @@ import React, { createContext, useCallback, useContext, useEffect, useMemo, useS
 import { base44 } from '@/api/base44Client';
 import { startActivityHeartbeat, stopActivityHeartbeat } from '@/lib/activityHeartbeat';
 import { initializeSubscriptions } from '@/lib/initSubscriptions';
+import { buildOnboardingCompletionPayload, markCalculatorIntroPending, shouldStartCalculatorIntro } from '@/lib/onboarding';
 
 const AuthContext = createContext(null);
 
@@ -13,6 +14,13 @@ function replaceBrowserPath(path) {
   if (typeof window === 'undefined') return;
   window.history.replaceState({}, document.title, path);
   window.dispatchEvent(new Event('popstate'));
+}
+
+function navigateToCalculatorIntroIfNeeded(currentUser) {
+  if (shouldStartCalculatorIntro(currentUser)) {
+    markCalculatorIntroPending();
+    replaceBrowserPath('/calculator');
+  }
 }
 
 export const AuthProvider = ({ children }) => {
@@ -75,7 +83,9 @@ export const AuthProvider = ({ children }) => {
   const login = useCallback(async ({ email, password }) => {
     setAuthError(null);
     const { user: loggedInUser } = await base44.auth.loginViaEmailPassword(email, password);
-    applyAuthenticatedUser(loggedInUser || await base44.auth.me());
+    const currentUser = loggedInUser || await base44.auth.me();
+    applyAuthenticatedUser(currentUser);
+    navigateToCalculatorIntroIfNeeded(currentUser);
   }, [applyAuthenticatedUser]);
 
   const register = useCallback(async ({ email, fullName, password }) => {
@@ -85,8 +95,16 @@ export const AuthProvider = ({ children }) => {
       full_name: fullName,
       password,
     });
-    applyAuthenticatedUser(registeredUser || await base44.auth.me());
+    const currentUser = registeredUser || await base44.auth.me();
+    applyAuthenticatedUser(currentUser);
+    navigateToCalculatorIntroIfNeeded(currentUser);
   }, [applyAuthenticatedUser]);
+
+  const completeOnboardingTour = useCallback(async (status = 'completed') => {
+    const updatedUser = await base44.auth.updateOnboarding(buildOnboardingCompletionPayload(status));
+    setUser(updatedUser);
+    return updatedUser;
+  }, []);
 
   const logout = useCallback(async (shouldRedirect = true) => {
     try {
@@ -123,6 +141,7 @@ export const AuthProvider = ({ children }) => {
     register,
     logout,
     navigateToLogin,
+    completeOnboardingTour,
     checkUserAuth,
     checkAppState,
   }), [
@@ -136,6 +155,7 @@ export const AuthProvider = ({ children }) => {
     register,
     logout,
     navigateToLogin,
+    completeOnboardingTour,
     checkUserAuth,
     checkAppState,
   ]);

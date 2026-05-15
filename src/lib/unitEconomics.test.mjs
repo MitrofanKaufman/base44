@@ -8,17 +8,23 @@ import {
   normalizeUnitEconomicsInput,
 } from './unitEconomics.js';
 import { buildCalculationPayload } from './calculationPayload.js';
+import {
+  CALCULATOR_INPUT_PLACEMENTS,
+  getCalculatorParameterDoc,
+} from './calculatorParameterDocs.js';
 import { applyFulfillmentModeSeed, buildCalculatorSeed } from './calculatorSeed.js';
 import {
   buildCalculatorViewModel,
   getLogisticsSensitivityField,
 } from './calculatorViewModel.js';
+import { buildCalculatorAdvice } from './calculatorAdvice.js';
 import { calculateRecommendedPrice } from './priceRecommendation.js';
 import {
   calculateBoxesPerPallet,
   calculateLogisticsCost,
   checkFulfillmentCompatibility,
   getPalletDimensions,
+  getTariffs,
 } from './LogisticsService.js';
 
 describe('unitEconomics donor parity', () => {
@@ -328,7 +334,266 @@ describe('calculator view model', () => {
   });
 });
 
+describe('calculator parameter documentation', () => {
+  it('documents every editable calculator placement', () => {
+    for (const placement of CALCULATOR_INPUT_PLACEMENTS) {
+      const doc = getCalculatorParameterDoc(placement.field);
+
+      assert.notEqual(doc.role, 'unknown', placement.field);
+      assert.ok(doc.tooltip, placement.field);
+      assert.ok(doc.label, placement.field);
+    }
+  });
+
+  it('does not place the same editable parameter in multiple calculator blocks', () => {
+    const duplicates = CALCULATOR_INPUT_PLACEMENTS
+      .map((placement) => placement.field)
+      .filter((field, index, fields) => fields.indexOf(field) !== index);
+
+    assert.deepEqual(duplicates, []);
+  });
+});
+
+describe('calculator profitability advice', () => {
+  it('returns a price action for unit-loss calculations', () => {
+    const form = {
+      price: 100,
+      wb_commission_pct: 20,
+      tax_pct: 6,
+      cogs_purchase: 120,
+      fbo_wb_logistics: 20,
+    };
+    const result = calculate(form);
+    const advice = buildCalculatorAdvice(form, result);
+    const priceItem = advice.items.find((item) => item.id === 'price');
+
+    assert.equal(advice.status, 'unit_loss');
+    assert.equal(priceItem?.field, 'price');
+    assert.equal(priceItem?.canApply, true);
+    assert.ok(priceItem.recommendedValue > form.price);
+    assert.equal(advice.fieldHints.price.itemId, 'price');
+  });
+
+  it('recommends a price that restores positive contribution', () => {
+    const form = {
+      price: 150,
+      wb_commission_pct: 18,
+      tax_pct: 6,
+      cogs_purchase: 130,
+      fbo_wb_logistics: 45,
+      cac: 30,
+      paid_share_pct: 100,
+    };
+    const result = calculate(form);
+    const advice = buildCalculatorAdvice(form, result);
+    const priceItem = advice.items.find((item) => item.id === 'price');
+    const projected = calculate({ ...form, price: priceItem.recommendedValue });
+
+    assert.equal(advice.status, 'unit_loss');
+    assert.ok(projected.contribution >= 1);
+    assert.ok(priceItem.projectedContribution >= 1);
+  });
+
+  it('creates field hints for high cost, logistics, and marketing drivers', () => {
+    const form = {
+      price: 300,
+      wb_commission_pct: 10,
+      tax_pct: 6,
+      cogs_purchase: 220,
+      fbo_wb_logistics: 80,
+      cac: 50,
+      paid_share_pct: 100,
+    };
+    const result = calculate(form);
+    const advice = buildCalculatorAdvice(form, result);
+
+    assert.equal(advice.status, 'unit_loss');
+    assert.equal(advice.fieldHints.cogs_purchase.itemId, 'cogs');
+    assert.equal(advice.fieldHints.fbo_wb_logistics.itemId, 'logistics');
+    assert.equal(advice.fieldHints.cac.itemId, 'marketing');
+    assert.equal(advice.fieldHints.paid_share_pct.itemId, 'marketing');
+  });
+
+  it('detects monthly loss when unit contribution is positive but plan is below BEP', () => {
+    const form = {
+      price: 1000,
+      wb_commission_pct: 10,
+      tax_pct: 6,
+      cogs_purchase: 300,
+      fixed_monthly: 10000,
+      monthly_plan: 5,
+    };
+    const result = calculate(form);
+    const advice = buildCalculatorAdvice(form, result);
+
+    assert.ok(result.contribution > 0);
+    assert.equal(advice.status, 'monthly_loss');
+    assert.equal(advice.items[0].field, 'monthly_plan');
+    assert.equal(advice.fieldHints.monthly_plan.itemId, 'monthly-plan');
+  });
+
+  it('does not show critical advice for profitable calculations', () => {
+    const form = {
+      price: 1000,
+      wb_commission_pct: 10,
+      tax_pct: 6,
+      cogs_purchase: 300,
+      fixed_monthly: 1000,
+      monthly_plan: 100,
+    };
+    const result = calculate(form);
+    const advice = buildCalculatorAdvice(form, result);
+
+    assert.equal(advice.status, 'profitable');
+    assert.deepEqual(advice.items, []);
+    assert.deepEqual(advice.fieldHints, {});
+  });
+});
+
 describe('logistics calculations', () => {
+  const matrixDirectories = {
+    wildberries: [
+      {
+        direction_id: 'warehouse-msk',
+        direction_name: 'Склад Москва',
+        tariffs: {
+          FBO: {
+            box: { base: 100, per_kg: 2, storage: 10 },
+            pallet: { base: 900, per_kg: 1, storage: 120 },
+          },
+          FBS: {
+            box: { base: 70, per_kg: 3, storage: 6 },
+            pallet: { base: 700, per_kg: 1.5, storage: 90 },
+          },
+        },
+      },
+      {
+        direction_id: 'pvz-spb',
+        direction_name: 'ПВЗ Санкт-Петербург',
+        tariffs: {
+          FBO: {
+            box: { base: 130, per_kg: 2.5, storage: 12 },
+            pallet: { base: 1100, per_kg: 1.2, storage: 140 },
+          },
+          FBS: {
+            box: { base: 95, per_kg: 3.5, storage: 7 },
+            pallet: { base: 850, per_kg: 1.7, storage: 100 },
+          },
+        },
+      },
+    ],
+  };
+
+  it('resolves directory tariffs by fulfillment mode, package mode, and direction', () => {
+    const fboBox = getTariffs('warehouse-msk', 'FBO', matrixDirectories, { packageMode: 'box' });
+    const fboPallet = getTariffs('warehouse-msk', 'FBO', matrixDirectories, { packageMode: 'pallet' });
+    const fbsBox = getTariffs('pvz-spb', 'FBS', matrixDirectories, { packageMode: 'box' });
+    const fbsPallet = getTariffs('pvz-spb', 'FBS', matrixDirectories, { packageMode: 'pallet' });
+
+    assert.deepEqual(
+      [fboBox.base, fboBox.per_kg, fboBox.storage, fboBox.source, fboBox.packageMode],
+      [100, 2, 10, 'wildberries', 'box'],
+    );
+    assert.deepEqual(
+      [fboPallet.base, fboPallet.per_kg, fboPallet.storage, fboPallet.source, fboPallet.packageMode],
+      [900, 1, 120, 'wildberries', 'pallet'],
+    );
+    assert.deepEqual(
+      [fbsBox.base, fbsBox.per_kg, fbsBox.storage, fbsBox.source, fbsBox.packageMode],
+      [95, 3.5, 7, 'wildberries', 'box'],
+    );
+    assert.deepEqual(
+      [fbsPallet.base, fbsPallet.per_kg, fbsPallet.storage, fbsPallet.source, fbsPallet.packageMode],
+      [850, 1.7, 100, 'wildberries', 'pallet'],
+    );
+  });
+
+  it('allocates pallet tariffs per box and keeps box tariffs per unit for all FBO/FBS direction combinations', () => {
+    const product = {
+      size_length_cm: 30,
+      size_width_cm: 40,
+      size_height_cm: 30,
+      weight_kg: 3,
+      wb_boxes_per_pallet: 10,
+    };
+
+    const cases = [
+      ['warehouse-msk', 'FBO', 'box', 114.3, 10],
+      ['warehouse-msk', 'FBO', 'pallet', 97.2, 12],
+      ['warehouse-msk', 'FBS', 'box', 91.45, 6],
+      ['warehouse-msk', 'FBS', 'pallet', 80.79, 9],
+      ['pvz-spb', 'FBO', 'box', 147.88, 12],
+      ['pvz-spb', 'FBO', 'pallet', 118.63, 14],
+      ['pvz-spb', 'FBS', 'box', 120.03, 7],
+      ['pvz-spb', 'FBS', 'pallet', 97.23, 10],
+    ];
+
+    for (const [direction, mode, packageMode, expectedTotal, expectedStorage] of cases) {
+      const result = calculateLogisticsCost(
+        { ...product, package_mode: packageMode },
+        mode,
+        direction,
+        matrixDirectories,
+      );
+
+      assert.equal(result.total, expectedTotal, `${direction} ${mode} ${packageMode} total`);
+      assert.equal(result.storage, expectedStorage, `${direction} ${mode} ${packageMode} storage`);
+      assert.equal(result.source, 'wildberries');
+      assert.equal(result.packageMode, packageMode);
+    }
+  });
+
+  it('supports WB liter-based tariff fields from the accounting formulas document', () => {
+    const directoriesMap = {
+      wildberries: [
+        {
+          direction_id: 'wb-formula',
+          direction_name: 'WB formula direction',
+          tariffs: {
+            FBO: {
+              box: {
+                boxDeliveryBase: 100,
+                boxDeliveryLiter: 5,
+                boxStorageBase: 10,
+                boxStorageLiter: 1,
+              },
+              pallet: {
+                palletDeliveryValueBase: 900,
+                palletDeliveryValueLiter: 20,
+                palletStorageValueExpr: 120,
+              },
+            },
+            FBS: {
+              box: {
+                boxDeliveryMarketplaceBase: 70,
+                boxDeliveryMarketplaceLiter: 4,
+              },
+            },
+          },
+        },
+      ],
+    };
+    const product = {
+      size_length_cm: 30,
+      size_width_cm: 40,
+      size_height_cm: 10,
+      weight_kg: 1,
+      wb_boxes_per_pallet: 10,
+    };
+
+    const fboBox = calculateLogisticsCost({ ...product, package_mode: 'box' }, 'FBO', 'wb-formula', directoriesMap);
+    const fboPallet = calculateLogisticsCost({ ...product, package_mode: 'pallet' }, 'FBO', 'wb-formula', directoriesMap);
+    const fbsBox = calculateLogisticsCost({ ...product, package_mode: 'box' }, 'FBS', 'wb-formula', directoriesMap);
+
+    assert.equal(fboBox.volumeLiters, 12);
+    assert.equal(fboBox.total, 155);
+    assert.equal(fboBox.storage, 21);
+    assert.equal(fboPallet.total, 1120);
+    assert.equal(fboPallet.storage, 120);
+    assert.equal(fbsBox.total, 114);
+    assert.equal(fbsBox.storage, 0);
+  });
+
   it('calculates boxes per pallet with rotated base fit and usable stack height', () => {
     const pallet = getPalletDimensions();
     const boxesPerPallet = calculateBoxesPerPallet({
@@ -525,6 +790,41 @@ describe('calculator seed from marketplace snapshots', () => {
     assert.equal(next.wb_commission_pct, 11.5);
     assert.equal(next.fbs_last_mile, 127.43);
     assert.equal(next.fbs_storage, 5);
+  });
+
+  it('recomputes logistics from package-specific directory tariffs when package mode changes', () => {
+    const form = {
+      ...defaultForm,
+      fulfillment_mode: 'FBO',
+      package_mode: 'pallet',
+      wb_boxes_per_pallet: 10,
+      size_length_cm: 30,
+      size_width_cm: 40,
+      size_height_cm: 30,
+      weight_kg: 3,
+      logistics_direction: 'warehouse-msk',
+    };
+    const next = applyFulfillmentModeSeed({
+      form,
+      fulfillmentMode: 'FBO',
+      logisticsDirectoriesMap: {
+        wildberries: [
+          {
+            direction_id: 'warehouse-msk',
+            tariffs: {
+              FBO: {
+                box: { base: 100, per_kg: 2, storage: 10 },
+                pallet: { base: 900, per_kg: 1, storage: 120 },
+              },
+            },
+          },
+        ],
+      },
+    });
+
+    assert.equal(next.package_mode, 'pallet');
+    assert.equal(next.fbo_wb_logistics, 97.2);
+    assert.equal(next.fbo_storage, 12);
   });
 
   it('falls back to Product commission and defaults when snapshots are empty', () => {

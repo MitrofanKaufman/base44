@@ -221,6 +221,7 @@ app.use((err, _req, res, _next) => {
 });
 
 await pool.query('ALTER TABLE app_users ADD COLUMN IF NOT EXISTS password_hash TEXT');
+await pool.query("ALTER TABLE app_users ADD COLUMN IF NOT EXISTS onboarding_state JSONB NOT NULL DEFAULT '{}'::jsonb");
 await pool.query('ALTER TABLE calculations ADD COLUMN IF NOT EXISTS wb_report JSONB');
 await ensureWildberriesCollectionTables(pool);
 await ensureAdminTables(pool);
