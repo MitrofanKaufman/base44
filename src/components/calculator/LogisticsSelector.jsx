@@ -4,6 +4,7 @@ import { base44 } from '@/api/base44Client';
 import { ChevronDown, MapPin, AlertCircle } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { getTariffs, getAvailableDirections, checkFulfillmentCompatibility, clearTariffCache } from '@/lib/LogisticsService';
+import CalculatorParameterTooltip from './CalculatorParameterTooltip';
 
 const MODES = {
   DIRECTION: 'direction',
@@ -18,6 +19,7 @@ export default function LogisticsSelector({
   onTariffsLoad,
   onPointChange,
   product = null,
+  packageMode = 'box',
   directoriesMap: externalDirectoriesMap = null,
 }) {
   const [open, setOpen] = useState(false);
@@ -125,17 +127,14 @@ export default function LogisticsSelector({
     }
 
     onDirectionChange(dirId);
-    const tariffs = getTariffs(dirId, fulfillmentMode, directoryMap);
+    const tariffs = getTariffs(dirId, fulfillmentMode, directoryMap, { packageMode });
     onTariffsLoad(tariffs, dirId);
     setOpen(false);
   };
 
   const handleSelectPickupPoint = (pointId) => {
     const point = pickupPoints.find(p => p.id === pointId);
-    if (onPointChange) {
-      onPointChange(pointId, point);
-    }
-    
+
     // Также обновляем направление
     if (point?.directionId) {
       const compatibility = checkFulfillmentCompatibility(product, fulfillmentMode);
@@ -144,8 +143,11 @@ export default function LogisticsSelector({
         return;
       }
 
+      if (onPointChange) {
+        onPointChange(pointId, point);
+      }
       onDirectionChange(point.directionId);
-      const tariffs = getTariffs(point.directionId, fulfillmentMode, directoryMap);
+      const tariffs = getTariffs(point.directionId, fulfillmentMode, directoryMap, { packageMode });
       onTariffsLoad(tariffs, point.directionId);
     }
     
@@ -173,6 +175,11 @@ export default function LogisticsSelector({
       )}
 
       {/* Переключатель режимов */}
+      <div className="flex items-center gap-1 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+        <span>Тарифный справочник</span>
+        <CalculatorParameterTooltip field="logistics_direction" />
+        <CalculatorParameterTooltip field="pickup_point" />
+      </div>
       <div className="flex gap-1 bg-secondary/40 rounded-md p-1">
         <button
           onClick={() => setMode(MODES.DIRECTION)}
@@ -285,10 +292,10 @@ export default function LogisticsSelector({
       {direction && currentDir && (
         <div className="mt-2 p-2 bg-secondary/30 rounded text-[10px] text-muted-foreground space-y-0.5">
           <p className="font-semibold text-foreground">
-            {mode === MODES.DIRECTION ? currentDir.name : currentPoint?.name || currentDir.name} • {fulfillmentMode}
+            {mode === MODES.DIRECTION ? currentDir.name : currentPoint?.name || currentDir.name} • {fulfillmentMode} • {packageMode === 'pallet' ? 'паллет' : 'короб'}
           </p>
           {(() => {
-            const tariffs = getTariffs(direction, fulfillmentMode, directoryMap);
+            const tariffs = getTariffs(direction, fulfillmentMode, directoryMap, { packageMode });
             return (
               <div className="grid grid-cols-3 gap-2">
                 <div>

@@ -177,6 +177,12 @@ const auth = {
       body: JSON.stringify(data),
     });
   },
+  async updateOnboarding(data) {
+    return request('/auth/me/onboarding', {
+      method: 'PATCH',
+      body: JSON.stringify(data),
+    });
+  },
   async loginViaEmailPassword(email, password) {
     const response = await request('/auth/login', {
       method: 'POST',

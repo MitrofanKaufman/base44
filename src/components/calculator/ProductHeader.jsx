@@ -1,13 +1,27 @@
 import { useState } from 'react';
-import { Store, Copy, ChevronDown, Info } from 'lucide-react';
+import { AlertTriangle, Store, Copy, ChevronDown, Info } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import CalculatorParameterTooltip from './CalculatorParameterTooltip';
 import ProductPickerDropdown from './ProductPickerDropdown';
 
+const FieldLabel = ({ field, children, className = '' }) => (
+  <span className={cn('inline-flex items-center gap-0.5 min-w-0', className)}>
+    <span className="truncate">{children}</span>
+    <CalculatorParameterTooltip field={field} />
+  </span>
+);
+
 /* Tiny price input */
-const PriceInput = ({ label, value, onChange, suffix = '₽' }) => (
+const PriceInput = ({ field, label, value, onChange, suffix = '₽', hint = null }) => (
   <div className="flex flex-col gap-0.5">
-    <span className="text-[9px] font-semibold text-muted-foreground uppercase tracking-wide leading-none">{label}</span>
-    <div className="flex items-center border border-border rounded-lg bg-secondary/40 h-[30px] px-1.5 gap-0.5">
+    <FieldLabel field={field} className={cn(
+      'text-[9px] font-semibold uppercase tracking-wide leading-none',
+      hint ? 'text-destructive' : 'text-muted-foreground',
+    )}>{label}</FieldLabel>
+    <div className={cn(
+      'flex items-center border rounded-lg bg-secondary/40 h-[30px] px-1.5 gap-0.5',
+      hint ? 'border-destructive/50 bg-destructive/5' : 'border-border',
+    )}>
       <input
         type="number" min="0"
         value={value ?? ''}
@@ -17,13 +31,21 @@ const PriceInput = ({ label, value, onChange, suffix = '₽' }) => (
       />
       <span className="text-[10px] text-muted-foreground flex-shrink-0">{suffix}</span>
     </div>
+    {hint && (
+      <div className="flex items-start gap-1 text-[9px] leading-tight text-destructive">
+        <AlertTriangle className="w-2.5 h-2.5 flex-shrink-0 mt-px" />
+        <span>{hint.title}</span>
+      </div>
+    )}
   </div>
 );
 
 /* Tiny dimension pill */
-const DimChip = ({ label, value, onChange, step = '1' }) => (
+const DimChip = ({ field, label, value, onChange, step = '1' }) => (
   <div className="flex flex-col items-center gap-0.5">
-    <span className="text-[8px] font-semibold text-muted-foreground uppercase tracking-wide leading-none">{label}</span>
+    <FieldLabel field={field} className="text-[8px] font-semibold text-muted-foreground uppercase tracking-wide leading-none">
+      {label}
+    </FieldLabel>
     <input
       type="number" min="0" step={step}
       value={value ?? ''}
@@ -35,9 +57,11 @@ const DimChip = ({ label, value, onChange, step = '1' }) => (
 );
 
 /* Compact segmented control */
-const Seg = ({ label, options, value, onChange }) => (
+const Seg = ({ field, label, options, value, onChange }) => (
   <div className="flex flex-col gap-0.5">
-    <span className="text-[8px] font-semibold text-muted-foreground uppercase tracking-wide leading-none">{label}</span>
+    <FieldLabel field={field} className="text-[8px] font-semibold text-muted-foreground uppercase tracking-wide leading-none">
+      {label}
+    </FieldLabel>
     <div className="flex rounded-lg border border-border overflow-hidden h-[30px]">
       {options.map(o => (
         <button
@@ -57,9 +81,10 @@ const Seg = ({ label, options, value, onChange }) => (
   </div>
 );
 
-export default function ProductHeader({ products, selectedProduct, onSelect, form, setField }) {
+export default function ProductHeader({ products, selectedProduct, onSelect, form, setField, fieldHints = {} }) {
   const [pickerOpen, setPickerOpen] = useState(false);
   const isPallet = (form.package_mode || 'box') === 'pallet';
+  const safeFieldHints = /** @type {Record<string, any>} */ (fieldHints);
 
   return (
     <div className="bg-card rounded-[18px] border border-border shadow-warm-sm flex flex-col gap-2 h-full" style={{ padding: '10px 12px' }}>
@@ -125,8 +150,8 @@ export default function ProductHeader({ products, selectedProduct, onSelect, for
 
         {/* Zone A: 2 price inputs stacked */}
         <div className="flex flex-col gap-1.5 justify-center w-full md:w-[130px]">
-          <PriceInput label="Цена продажи"    value={form.price}            onChange={v => setField('price', v)} />
-          <PriceInput label="Цена кабинет WB" value={form.wb_cabinet_price} onChange={v => setField('wb_cabinet_price', v)} />
+          <PriceInput field="price" label="Цена продажи" value={form.price} onChange={v => setField('price', v)} hint={safeFieldHints.price} />
+          <PriceInput field="wb_cabinet_price" label="Цена кабинет WB" value={form.wb_cabinet_price} onChange={v => setField('wb_cabinet_price', v)} />
         </div>
 
         {/* Divider */}
@@ -134,12 +159,15 @@ export default function ProductHeader({ products, selectedProduct, onSelect, for
 
         {/* Zone B: plan + 4 dim chips */}
         <div className="flex flex-col gap-1.5 flex-1 justify-center min-w-0">
-          <PriceInput label="План / мес." value={form.monthly_plan} onChange={v => setField('monthly_plan', v)} suffix="шт." />
+          <PriceInput field="monthly_plan" label="План / мес." value={form.monthly_plan} onChange={v => setField('monthly_plan', v)} suffix="шт." hint={safeFieldHints.monthly_plan} />
           <div className="flex gap-1.5 flex-wrap">
-            <DimChip label={isPallet ? 'Дл. кор.' : 'Длина'}  value={form.size_length_cm} onChange={v => setField('size_length_cm', v)} />
-            <DimChip label={isPallet ? 'Шир. кор.' : 'Ширина'} value={form.size_width_cm}  onChange={v => setField('size_width_cm', v)} />
-            <DimChip label={isPallet ? 'Выс. кор.' : 'Высота'} value={form.size_height_cm} onChange={v => setField('size_height_cm', v)} />
-            <DimChip label="Вес кг" value={form.weight_kg}      onChange={v => setField('weight_kg', v)} step="0.01" />
+            <DimChip field="size_length_cm" label={isPallet ? 'Дл. кор.' : 'Длина'} value={form.size_length_cm} onChange={v => setField('size_length_cm', v)} />
+            <DimChip field="size_width_cm" label={isPallet ? 'Шир. кор.' : 'Ширина'} value={form.size_width_cm} onChange={v => setField('size_width_cm', v)} />
+            <DimChip field="size_height_cm" label={isPallet ? 'Выс. кор.' : 'Высота'} value={form.size_height_cm} onChange={v => setField('size_height_cm', v)} />
+            <DimChip field="weight_kg" label="Вес кг" value={form.weight_kg} onChange={v => setField('weight_kg', v)} step="0.01" />
+            {isPallet && (
+              <DimChip field="wb_boxes_per_pallet" label="Кор./пал." value={form.wb_boxes_per_pallet} onChange={v => setField('wb_boxes_per_pallet', v)} />
+            )}
           </div>
         </div>
 
@@ -149,12 +177,14 @@ export default function ProductHeader({ products, selectedProduct, onSelect, for
         {/* Zone C: toggles */}
         <div className="flex flex-col gap-1.5 justify-center flex-shrink-0 w-full md:w-[130px]">
           <Seg
+            field="fulfillment_mode"
             label="Схема"
             options={[{ label: 'FBO', value: 'FBO' }, { label: 'FBS', value: 'FBS' }]}
             value={form.fulfillment_mode}
             onChange={v => setField('fulfillment_mode', v)}
           />
           <Seg
+            field="package_mode"
             label="Упаковка"
             options={[{ label: 'Короб', value: 'box' }, { label: 'Паллет', value: 'pallet' }]}
             value={form.package_mode || 'box'}

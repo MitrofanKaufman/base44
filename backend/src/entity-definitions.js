@@ -448,6 +448,7 @@ export const entityDefinitions = {
       email: { db: 'email', schema: t.string('The email of the user') },
       full_name: { db: 'full_name', schema: t.string('The full name of the user') },
       role: { db: 'role', schema: t.string('The role of the user in the app', { enum: ['admin', 'user'] }) },
+      onboarding_state: { db: 'onboarding_state', schema: t.object('Completed onboarding tours by key') },
       id: { db: 'id', schema: t.string('Unique record identifier') },
       created_date: { db: 'created_date', schema: t.string('Record creation timestamp', { format: 'date-time' }) },
       updated_date: { db: 'updated_date', schema: t.string('Record last update timestamp', { format: 'date-time' }) },

@@ -3,6 +3,9 @@ import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react
 export const MASONRY_ROW_HEIGHT = 8;
 export const MASONRY_GAP = 12;
 
+/**
+ * @param {HTMLElement | null | undefined} node
+ */
 function resolveNodeHeight(node) {
   if (!node) return 0;
   return node.getBoundingClientRect().height || node.scrollHeight || 0;
@@ -20,9 +23,9 @@ export function useMasonryGrid({
   rowHeight = MASONRY_ROW_HEIGHT,
   gap = MASONRY_GAP,
 } = {}) {
-  const elementsRef = useRef(new Map());
-  const observerRef = useRef(null);
-  const [rowSpans, setRowSpans] = useState({});
+  const elementsRef = useRef(/** @type {Map<string, HTMLElement>} */ (new Map()));
+  const observerRef = useRef(/** @type {ResizeObserver | null} */ (null));
+  const [rowSpans, setRowSpans] = useState(/** @type {Record<string, number>} */ ({}));
   const itemSignature = itemIds.join('|');
 
   const setItemSpan = useCallback((id, node) => {
@@ -74,12 +77,14 @@ export function useMasonryGrid({
         const next = { ...current };
 
         entries.forEach(entry => {
-          const id = entry.target.dataset.masonryGridItem;
+          const target = entry.target;
+          if (!(target instanceof HTMLElement)) return;
+          const id = target.dataset.masonryGridItem;
           if (!id) return;
           const borderBox = Array.isArray(entry.borderBoxSize)
             ? entry.borderBoxSize[0]
             : entry.borderBoxSize;
-          const height = borderBox?.blockSize || resolveNodeHeight(entry.target);
+          const height = borderBox?.blockSize || resolveNodeHeight(target);
           const span = getMasonryRowSpan(height, rowHeight, gap);
 
           if (next[id] !== span) {
@@ -109,7 +114,7 @@ export function useMasonryGrid({
     const activeIds = new Set(itemIds);
     setRowSpans(current => {
       let changed = false;
-      const next = {};
+      const next = /** @type {Record<string, number>} */ ({});
 
       Object.entries(current).forEach(([id, span]) => {
         if (!activeIds.has(id)) {

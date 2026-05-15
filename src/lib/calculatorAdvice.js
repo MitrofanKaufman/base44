@@ -58,6 +58,12 @@ function findPriceForContribution(form = {}, targetContribution) {
   return undefined;
 }
 
+/**
+ * @param {Record<string, any>} form
+ * @param {Record<string, any>} result
+ * @param {number} gapRub
+ * @returns {CalculatorAdviceItem[]}
+ */
 function buildDriverItems(form = {}, result = {}, gapRub = 0) {
   const activeFields = activeLogisticsFields(form);
   const drivers = [
@@ -119,7 +125,7 @@ function buildDriverItems(form = {}, result = {}, gapRub = 0) {
     .sort((a, b) => b.impactRub - a.impactRub)
     .map((driver) => ({
       id: driver.id,
-      severity: 'warning',
+      severity: /** @type {CalculatorAdviceSeverity} */ ('warning'),
       field: driver.field,
       fields: driver.fields,
       title: driver.title,
@@ -170,7 +176,7 @@ function buildDriverItems(form = {}, result = {}, gapRub = 0) {
  */
 export function buildCalculatorAdvice(form = {}, result = calculate(form), { minContributionRub = 1 } = {}) {
   const contribution = finiteNumber(result.contribution);
-  const fieldHints = {};
+  const fieldHints = /** @type {Record<string, CalculatorFieldHint>} */ ({});
 
   if (contribution <= 0) {
     const targetContribution = Math.max(0.01, minContributionRub);
@@ -180,7 +186,7 @@ export function buildCalculatorAdvice(form = {}, result = calculate(form), { min
       ? undefined
       : calculate({ ...form, price: recommendedPrice });
 
-    const priceItem = {
+    const priceItem = /** @type {CalculatorAdviceItem} */ ({
       id: 'price',
       severity: 'critical',
       field: 'price',
@@ -193,7 +199,7 @@ export function buildCalculatorAdvice(form = {}, result = calculate(form), { min
       recommendedValue: recommendedPrice,
       canApply: recommendedPrice !== undefined,
       projectedContribution: priceProjection ? finiteNumber(priceProjection.contribution) : undefined,
-    };
+    });
 
     const driverItems = buildDriverItems(form, result, gapRub);
     const visibleItems = [priceItem, ...driverItems.slice(0, 3)];
@@ -220,7 +226,7 @@ export function buildCalculatorAdvice(form = {}, result = calculate(form), { min
   if (monthlyPlan !== undefined && fixedMonthlyTotal > 0 && bepUnits !== undefined && monthlyPlan < Math.ceil(bepUnits)) {
     const requiredUnits = Math.ceil(bepUnits);
     const monthlyProfit = contribution * monthlyPlan - fixedMonthlyTotal;
-    const monthlyItem = {
+    const monthlyItem = /** @type {CalculatorAdviceItem} */ ({
       id: 'monthly-plan',
       severity: 'warning',
       field: 'monthly_plan',
@@ -231,7 +237,7 @@ export function buildCalculatorAdvice(form = {}, result = calculate(form), { min
       recommendedValue: requiredUnits,
       canApply: false,
       projectedContribution: contribution,
-    };
+    });
 
     monthlyItem.fields.forEach((field) => addFieldHint(fieldHints, field, monthlyItem));
 

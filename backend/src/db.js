@@ -2,8 +2,16 @@ import pg from 'pg';
 
 const { Pool } = pg;
 
+/**
+ * Пул соединений с PostgreSQL (singleton)
+ * @type {Pool|null}
+ */
 let pool;
 
+/**
+ * Возвращает или создает пул соединений с PostgreSQL
+ * @returns {Pool} Пул соединений с базой данных
+ */
 export function getPool() {
   if (pool) return pool;
 

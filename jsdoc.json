@@ -1,0 +1,34 @@
+{
+  "source": {
+    "include": [
+      "backend/src/**/*.js",
+      "src/lib/**/*.js",
+      "src/components/**/*.jsx",
+      "src/pages/**/*.jsx"
+    ],
+    "exclude": [
+      "node_modules",
+      "dist",
+      "build",
+      ".history",
+      "**/*.test.mjs",
+      "**/*.test.js"
+    ],
+    "includePattern": ".+\\.(js|jsx)?$"
+  },
+  "opts": {
+    "destination": "./docs/jsdoc",
+    "recurse": true,
+    "readme": "./README.md"
+  },
+  "plugins": [
+    "plugins/markdown"
+  ],
+  "templates": {
+    "cleverLinks": false,
+    "monospaceLinks": false,
+    "default": {
+      "outputSourceFiles": true
+    }
+  }
+}
