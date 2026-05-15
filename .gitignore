@@ -31,3 +31,5 @@ dist-ssr
 .env.local
 .env.*.local
 .vite
+.history/
+.playwright-mcp/

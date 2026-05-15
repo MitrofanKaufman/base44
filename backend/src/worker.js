@@ -11,11 +11,21 @@ import {
 
 dotenv.config();
 
+/**
+ * Пул соединений с базой данных
+ * @type {import('pg').Pool}
+ */
 const pool = getPool();
+
+// Инициализация таблиц
 await ensureWildberriesCollectionTables(pool);
 await ensureAdminTables(pool);
 await ensureSystemScheduledTaskTables(pool);
 
+/**
+ * Отправляет heartbeat сигнал для воркера
+ * @returns {Promise<void>}
+ */
 async function sendWorkerHeartbeat() {
   try {
     await recordWorkerHeartbeat(pool, {
@@ -30,6 +40,10 @@ async function sendWorkerHeartbeat() {
   }
 }
 
+/**
+ * Запускает планировщик рассылок
+ * @returns {Promise<void>}
+ */
 async function runBroadcastScheduler() {
   try {
     const results = await processDueBroadcastSchedules(pool);
@@ -41,6 +55,10 @@ async function runBroadcastScheduler() {
   }
 }
 
+/**
+ * Запускает планировщик системных задач
+ * @returns {Promise<void>}
+ */
 async function runSystemTaskScheduler() {
   try {
     const results = await processDueSystemTasks(pool, { jobQueue });
@@ -52,6 +70,10 @@ async function runSystemTaskScheduler() {
   }
 }
 
+/**
+ * Воркер для обработки заданий из очереди
+ * @type {import('bullmq').Worker}
+ */
 const worker = createJobWorker(async (job) => {
   console.log(`[worker] job ${job.name}`, job.data);
 
@@ -69,14 +91,21 @@ const worker = createJobWorker(async (job) => {
   }
 });
 
+/**
+ * Обработчик завершения задания
+ */
 worker.on('completed', (job) => {
   console.log(`[worker] completed ${job.name}#${job.id}`);
 });
 
+/**
+ * Обработчик ошибки задания
+ */
 worker.on('failed', (job, err) => {
   console.error(`[worker] failed ${job?.name}#${job?.id}`, err);
 });
 
+// Планировщик рассылок
 const broadcastSchedulerInterval = setInterval(
   runBroadcastScheduler,
   Number(process.env.BROADCAST_SCHEDULER_INTERVAL_MS || 60_000),
@@ -84,6 +113,7 @@ const broadcastSchedulerInterval = setInterval(
 broadcastSchedulerInterval.unref();
 await runBroadcastScheduler();
 
+// Планировщик системных задач
 const systemTaskSchedulerInterval = setInterval(
   runSystemTaskScheduler,
   Number(process.env.SYSTEM_TASK_INTERVAL_MS || 60_000),
@@ -91,6 +121,7 @@ const systemTaskSchedulerInterval = setInterval(
 systemTaskSchedulerInterval.unref();
 await runSystemTaskScheduler();
 
+// Heartbeat воркера
 const workerHeartbeatInterval = setInterval(
   sendWorkerHeartbeat,
   Number(process.env.WORKER_HEARTBEAT_INTERVAL_MS || 30_000),
@@ -98,6 +129,10 @@ const workerHeartbeatInterval = setInterval(
 workerHeartbeatInterval.unref();
 await sendWorkerHeartbeat();
 
+/**
+ * Корректно останавливает воркер
+ * @returns {Promise<void>}
+ */
 async function shutdownWorker() {
   clearInterval(broadcastSchedulerInterval);
   clearInterval(systemTaskSchedulerInterval);
@@ -107,5 +142,6 @@ async function shutdownWorker() {
   process.exit(0);
 }
 
+// Обработчики сигналов завершения
 process.on('SIGINT', shutdownWorker);
 process.on('SIGTERM', shutdownWorker);

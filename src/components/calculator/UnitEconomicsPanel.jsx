@@ -29,6 +29,16 @@ const MetricCard = ({ label, value, suffix = '', trend = 0, alert = false }) => 
   </div>
 );
 
+const pickMetric = (result, camelKey, snakeKey, fallback = 0) => (
+  result?.[camelKey] ?? result?.[snakeKey] ?? fallback
+);
+
+const pickBoolean = (result, camelKey, snakeKey, fallback) => {
+  if (typeof result?.[camelKey] === 'boolean') return result[camelKey];
+  if (typeof result?.[snakeKey] === 'boolean') return result[snakeKey];
+  return fallback;
+};
+
 export default function UnitEconomicsPanel({ form, result }) {
   if (!result) {
     return (
@@ -41,22 +51,37 @@ export default function UnitEconomicsPanel({ form, result }) {
     );
   }
 
-  const priceNet = result.priceNet ?? 0;
-  const view = buildCalculatorViewModel(form, result);
-  const grossProfit = result.grossProfit ?? 0;
-  const grossMarginPct = result.grossMarginPct ?? 0;
+  const priceNet = pickMetric(result, 'priceNet', 'price_net');
+  const grossProfit = pickMetric(result, 'grossProfit', 'gross_profit');
+  const grossMarginPct = pickMetric(result, 'grossMarginPct', 'gross_margin_pct');
   const grossMarginDisplay = ratioToPercent(grossMarginPct);
   const contribution = result.contribution ?? 0;
-  const contributionPct = result.contributionPct ?? 0;
+  const contributionPct = pickMetric(result, 'contributionPct', 'contribution_pct');
   const contributionDisplay = ratioToPercent(contributionPct);
-  const varCost = result.varCost ?? 0;
-  const cogsWithWaste = result.cogsWithWaste ?? 0;
-  const isProfitable = result.isProfitable ?? contribution > 0;
+  const varCost = pickMetric(result, 'varCost', 'var_cost');
+  const cogsWithWaste = pickMetric(result, 'cogsWithWaste', 'cogs_with_waste');
+  const marketingCost = pickMetric(result, 'marketingCost', 'marketing_cost');
+  const isProfitable = pickBoolean(result, 'isProfitable', 'is_profitable', contribution > 0);
+  const normalizedResult = {
+    ...result,
+    priceNet,
+    revenueNet: pickMetric(result, 'revenueNet', 'revenue_net'),
+    grossProfit,
+    grossMarginPct,
+    contribution,
+    contributionPct,
+    varCost,
+    cogsWithWaste,
+    marketingCost,
+    bepUnits: pickMetric(result, 'bepUnits', 'bep_units', undefined),
+    isProfitable,
+  };
+  const view = buildCalculatorViewModel(form, normalizedResult);
 
   // Рассчитываем дополнительные метрики
   const roi = cogsWithWaste > 0 ? ((contribution / cogsWithWaste) * 100) : 0;
-  const returnOnMarketing = result.marketingCost > 0 && contribution > 0
-    ? ((contribution / result.marketingCost) - 1) * 100
+  const returnOnMarketing = marketingCost > 0 && contribution > 0
+    ? ((contribution / marketingCost) - 1) * 100
     : 0;
 
   return (
@@ -121,7 +146,7 @@ export default function UnitEconomicsPanel({ form, result }) {
 
       {/* Дополнительные показатели */}
       <div className="space-y-2 mt-auto pt-3 border-t border-border/40">
-        {result.marketingCost > 0 && (
+        {marketingCost > 0 && (
           <div className="flex items-center justify-between text-[10px]">
             <span className="text-muted-foreground">ROAS (CAC):</span>
             <span className={cn(

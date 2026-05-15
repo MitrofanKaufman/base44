@@ -3,6 +3,10 @@
  * Хранит комиссии по категориям и источникам
  */
 
+/**
+ * Комиссии по умолчанию для маркетплейсов и категорий
+ * @constant {Object<string, Object<string, number>>}
+ */
 const DEFAULT_COMMISSIONS = {
   wildberries: {
     'Электроника': 15,
@@ -30,11 +34,23 @@ const DEFAULT_COMMISSIONS = {
   }
 };
 
+/**
+ * Получает комиссию по категории товара
+ * @param {string} category - Категория товара
+ * @param {string} source - Источник (wildberries, yandex, ozon)
+ * @returns {number} Комиссия в процентах
+ */
 export function getCommissionByCategory(category, source = 'wildberries') {
   const sourceCommissions = DEFAULT_COMMISSIONS[source] || DEFAULT_COMMISSIONS.wildberries;
   return sourceCommissions[category] || sourceCommissions.default;
 }
 
+/**
+ * Получает комиссию для товара с учетом приоритетов
+ * @param {Object} product - Данные товара
+ * @param {string} source - Источник (wildberries, yandex, ozon)
+ * @returns {number} Комиссия в процентах
+ */
 export function getCommissionByProduct(product, source = 'wildberries') {
   // Приоритет: явная комиссия на товаре > категория > default
   if (product?.wb_commission_pct) {
@@ -49,17 +65,39 @@ export function getCommissionByProduct(product, source = 'wildberries') {
   return sourceCommissions.default;
 }
 
+/**
+ * Нормализует название категории
+ * @param {*} value - Значение для нормализации
+ * @returns {string} Нормализованное название
+ */
 const normalizeName = (value) => String(value || '').trim().toLowerCase();
 
+/**
+ * Возвращает поле модели для режима выполнения
+ * @param {string} fulfillmentMode - Режим выполнения (FBO или FBS)
+ * @returns {string} Имя поля модели
+ */
 const modelFieldForMode = (fulfillmentMode = 'FBO') => (
   fulfillmentMode === 'FBS' ? 'kgvpSupplier' : 'kgvpMarketplace'
 );
 
+/**
+ * Проверяет, что значение является конечным положительным числом
+ * @param {*} value - Значение для проверки
+ * @returns {number|undefined} Число или undefined
+ */
 const finitePositive = (value) => {
   const parsed = Number(value);
   return Number.isFinite(parsed) && parsed > 0 ? parsed : undefined;
 };
 
+/**
+ * Получает комиссию из справочника маркетплейса
+ * @param {Object} product - Данные товара
+ * @param {string} fulfillmentMode - Режим выполнения (FBO или FBS)
+ * @param {Array} directories - Справочники комиссий
+ * @returns {number|undefined} Комиссия в процентах или undefined
+ */
 export function getCommissionFromDirectory(product, fulfillmentMode = 'FBO', directories = []) {
   if (!product) return undefined;
   const categoryName = normalizeName(product.category || product.category_name);
@@ -79,6 +117,13 @@ export function getCommissionFromDirectory(product, fulfillmentMode = 'FBO', dir
     ?? finitePositive(row.commission_pct);
 }
 
+/**
+ * Разрешает комиссию Wildberries с учетом всех источников
+ * @param {Object} product - Данные товара
+ * @param {string} fulfillmentMode - Режим выполнения (FBO или FBS)
+ * @param {Array} directories - Справочники комиссий
+ * @returns {number} Комиссия в процентах
+ */
 export function resolveWbCommission(product, fulfillmentMode = 'FBO', directories = []) {
   return getCommissionFromDirectory(product, fulfillmentMode, directories)
     ?? finitePositive(product?.wb_commission_pct)
@@ -86,6 +131,11 @@ export function resolveWbCommission(product, fulfillmentMode = 'FBO', directorie
     ?? 15;
 }
 
+/**
+ * Получает все комиссии для источника
+ * @param {string} source - Источник (wildberries, yandex, ozon)
+ * @returns {Object<string, number>} Объект с комиссиями по категориям
+ */
 export function getAllCommissions(source = 'wildberries') {
   return DEFAULT_COMMISSIONS[source] || DEFAULT_COMMISSIONS.wildberries;
 }

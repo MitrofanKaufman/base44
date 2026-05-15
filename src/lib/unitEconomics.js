@@ -6,10 +6,22 @@
  * donor camelCase input names and this project's legacy snake_case form names.
  */
 
+/**
+ * Защитное значение для точки безубыточности
+ * @constant {number}
+ */
 export const UNIT_ECON_BEP_GUARD_VALUE = 100_000_000;
 
+/**
+ * Система налогообложения по умолчанию
+ * @constant {string}
+ */
 const DEFAULT_TAX_SYSTEM = 'ip_usn_income_no_vat';
 
+/**
+ * База налогообложения для каждой системы
+ * @constant {Object<string, string>}
+ */
 const TAX_SYSTEM_BASIS = {
   ip_usn_income_no_vat: 'income',
   ip_usn_income_expense_no_vat: 'income_expense',
@@ -24,11 +36,20 @@ const TAX_SYSTEM_BASIS = {
   npd: 'income',
 };
 
+/**
+ * Маппинг устаревших названий систем налогообложения
+ * @constant {Object<string, string>}
+ */
 const LEGACY_TAX_SYSTEMS = {
   usn_income: 'ip_usn_income_no_vat',
   usn_income_expense: 'ip_usn_income_expense_no_vat',
 };
 
+/**
+ * Преобразует значение в число
+ * @param {*} value - Значение для преобразования
+ * @returns {number|undefined} Число или undefined
+ */
 const toNumber = (value) => {
   if (typeof value === 'number' && Number.isFinite(value)) return value;
   if (typeof value === 'string' && value.trim()) {
@@ -38,13 +59,32 @@ const toNumber = (value) => {
   return undefined;
 };
 
+/**
+ * Округляет значение до указанного количества знаков
+ * @param {number} value - Значение для округления
+ * @param {number} digits - Количество знаков
+ * @returns {number} Округленное значение
+ */
 const round = (value, digits = 2) => {
   const factor = 10 ** digits;
   return Math.round(value * factor) / factor;
 };
 
+/**
+ * Ограничивает значение в диапазоне
+ * @param {number} value - Значение
+ * @param {number} min - Минимум
+ * @param {number} max - Максимум
+ * @returns {number} Ограниченное значение
+ */
 const clamp = (value, min, max) => Math.min(max, Math.max(min, value));
 
+/**
+ * Выбирает первое определенное значение из объекта по ключам
+ * @param {Object} source - Объект-источник
+ * @param {Array<string>} keys - Список ключей
+ * @returns {*} Первое найденное значение или undefined
+ */
 const pick = (source, keys) => {
   for (const key of keys) {
     if (source?.[key] !== undefined) return source[key];
@@ -52,36 +92,68 @@ const pick = (source, keys) => {
   return undefined;
 };
 
+/**
+ * Нормализует денежное значение
+ * @param {*} value - Значение для нормализации
+ * @param {number} fallback - Значение по умолчанию
+ * @returns {number} Нормализованное значение
+ */
 const normalizeMoney = (value, fallback = 0) => {
   const parsed = toNumber(value);
   if (parsed === undefined) return fallback;
   return Math.max(0, parsed);
 };
 
+/**
+ * Нормализует процентное значение
+ * @param {*} value - Значение для нормализации
+ * @param {number} fallback - Значение по умолчанию
+ * @returns {number} Нормализованное значение в диапазоне 0-100
+ */
 const normalizePercent = (value, fallback = 0) => {
   const parsed = toNumber(value);
   if (parsed === undefined) return fallback;
   return clamp(parsed, 0, 100);
 };
 
+/**
+ * Нормализует систему налогообложения
+ * @param {*} value - Значение для нормализации
+ * @returns {string|undefined} Нормализованная система налогообложения
+ */
 const normalizeTaxSystem = (value) => {
   if (typeof value !== 'string') return undefined;
   const mapped = LEGACY_TAX_SYSTEMS[value] ?? value;
   return mapped in TAX_SYSTEM_BASIS ? mapped : undefined;
 };
 
+/**
+ * Нормализует ставку НДС
+ * @param {*} value - Значение для нормализации
+ * @returns {number|undefined} Ставка НДС (5, 7 или 22) или undefined
+ */
 const normalizeVatPct = (value) => {
   const parsed = toNumber(value);
   if (parsed === 5 || parsed === 7 || parsed === 22) return parsed;
   return undefined;
 };
 
+/**
+ * Нормализует положительное число
+ * @param {*} value - Значение для нормализации
+ * @returns {number|undefined} Положительное число или undefined
+ */
 const normalizePositive = (value) => {
   const parsed = toNumber(value);
   if (parsed === undefined || !Number.isFinite(parsed) || parsed < 0) return undefined;
   return parsed;
 };
 
+/**
+ * Нормализует целочисленный ID
+ * @param {*} value - Значение для нормализации
+ * @returns {number|undefined} Целое число или undefined
+ */
 const normalizeIntId = (value) => {
   const parsed = toNumber(value);
   if (parsed === undefined) return undefined;
@@ -90,6 +162,11 @@ const normalizeIntId = (value) => {
   return int;
 };
 
+/**
+ * Нормализует неотрицательное целое число
+ * @param {*} value - Значение для нормализации
+ * @returns {number|undefined} Неотрицательное целое число или undefined
+ */
 const normalizeNonNegativeInt = (value) => {
   const parsed = toNumber(value);
   if (parsed === undefined) return undefined;
@@ -98,30 +175,55 @@ const normalizeNonNegativeInt = (value) => {
   return int;
 };
 
+/**
+ * Нормализует режим тарифа
+ * @param {*} value - Значение для нормализации
+ * @returns {string|undefined} 'pallet' или 'box' или undefined
+ */
 const normalizeTariffMode = (value) => {
   if (value === 'pallet') return 'pallet';
   if (value === 'box') return 'box';
   return undefined;
 };
 
+/**
+ * Нормализует тип паллеты
+ * @param {*} value - Значение для нормализации
+ * @returns {string|undefined} 'piece' или 'mono' или undefined
+ */
 const normalizePalletType = (value) => {
   if (value === 'piece') return 'piece';
   if (value === 'mono') return 'mono';
   return undefined;
 };
 
+/**
+ * Нормализует направление тарифа
+ * @param {*} value - Значение для нормализации
+ * @returns {string|undefined} 'toWarehouse' или 'toOffice' или undefined
+ */
 const normalizeTariffDestination = (value) => {
   if (value === 'toWarehouse') return 'toWarehouse';
   if (value === 'toOffice') return 'toOffice';
   return undefined;
 };
 
+/**
+ * Нормализует булево значение
+ * @param {*} value - Значение для нормализации
+ * @returns {boolean|undefined} true, false или undefined
+ */
 const normalizeBoolean = (value) => {
   if (value === true) return true;
   if (value === false) return false;
   return undefined;
 };
 
+/**
+ * Нормализует дату в формат YYYY-MM-DD
+ * @param {*} value - Значение для нормализации
+ * @returns {string|undefined} Дата в формате YYYY-MM-DD или undefined
+ */
 const normalizeDateInput = (value) => {
   if (typeof value !== 'string') return undefined;
   const trimmed = value.trim();
@@ -132,15 +234,33 @@ const normalizeDateInput = (value) => {
   return new Date(parsed).toISOString().slice(0, 10);
 };
 
+/**
+ * Вычисляет объем в литрах
+ * @param {number} l - Длина в см
+ * @param {number} w - Ширина в см
+ * @param {number} h - Высота в см
+ * @returns {number|null} Объем в литрах или null
+ */
 export function calcVolumeliters(l, w, h) {
   if (!l || !w || !h) return null;
   return (l * w * h) / 1000;
 }
 
+/**
+ * Проверяет, является ли товар крупногабаритным (КГТ)
+ * @param {number} weightKg - Вес в кг
+ * @param {number} volumeLiters - Объем в литрах
+ * @returns {boolean} true, если товар КГТ
+ */
 export function isKgt(weightKg, volumeLiters) {
   return weightKg > 25 || volumeLiters > 25;
 }
 
+/**
+ * Нормализует входные данные для расчета юнит-экономики
+ * @param {Object} inputs - Входные данные (camelCase или snake_case)
+ * @returns {Object} Нормализованные данные
+ */
 export function normalizeUnitEconomicsInput(inputs = {}) {
   const fulfillmentMode = pick(inputs, ['fulfillmentMode', 'fulfillment_mode']) === 'FBS' ? 'FBS' : 'FBO';
   const wbTariffMode = normalizeTariffMode(pick(inputs, ['wbTariffMode', 'wb_tariff_mode', 'package_mode']));
@@ -215,6 +335,12 @@ export function normalizeUnitEconomicsInput(inputs = {}) {
   };
 }
 
+/**
+ * Рассчитывает юнит-экономику совместимую с donor
+ * @param {Object} inputs - Входные данные
+ * @param {Object} product - Данные товара
+ * @returns {Object} Результаты расчета юнит-экономики
+ */
 export function calculateDonorUnitEconomics(inputs, product = {}) {
   const safeInputs = normalizeUnitEconomicsInput(inputs);
   const salePrice = normalizeMoney(safeInputs.price, product.salePrice ?? product.price ?? 0);
@@ -326,14 +452,30 @@ export function calculateDonorUnitEconomics(inputs, product = {}) {
   };
 }
 
+/**
+ * Рассчитывает юнит-экономику (псевдоним для calculateDonorUnitEconomics)
+ * @param {Object} input - Входные данные
+ * @returns {Object} Результаты расчета
+ */
 export function calculate(input) {
   return calculateDonorUnitEconomics(input);
 }
 
+/**
+ * Делит числа или возвращает undefined при делении на ноль
+ * @param {number} numerator - Числитель
+ * @param {number} denominator - Знаменатель
+ * @returns {number|undefined} Результат деления или undefined
+ */
 const divideOrUndefined = (numerator, denominator) => (
   Number.isFinite(denominator) && denominator !== 0 ? numerator / denominator : undefined
 );
 
+/**
+ * Рассчитывает метрики отчета Wildberries
+ * @param {Object} input - Входные данные отчета
+ * @returns {Object} Метрики отчета
+ */
 export function calculateWbReportMetrics(input = {}) {
   const salesRub = normalizeMoney(pick(input, ['wbSalesRub', 'wb_sales_rub', 'sales_rub']));
   const returnsRub = normalizeMoney(pick(input, ['wbReturnsRub', 'wb_returns_rub', 'returns_rub']));
@@ -396,22 +538,48 @@ export function calculateWbReportMetrics(input = {}) {
   };
 }
 
+/**
+ * Проверяет, что значение является конечным числом
+ * @param {*} value - Значение для проверки
+ * @returns {boolean} true, если это конечное число
+ */
 const hasFiniteNumber = (value) => typeof value === 'number' && Number.isFinite(value);
 
+/**
+ * Преобразует отношение в проценты
+ * @param {number} value - Значение (0-1)
+ * @returns {number} Значение в процентах (0-100)
+ */
 export function ratioToPercent(value) {
   return hasFiniteNumber(value) ? value * 100 : value;
 }
 
+/**
+ * Нормализует процентоподобное значение
+ * @param {number} value - Значение
+ * @returns {number} Нормализованное значение в процентах
+ */
 export function normalizePercentLike(value) {
   if (!hasFiniteNumber(value)) return value;
   return Math.abs(value) <= 1 ? value * 100 : value;
 }
 
+/**
+ * Форматирует значение как рубли
+ * @param {number} v - Значение
+ * @returns {string} Отформатированная строка
+ */
 export function formatRub(v) {
   if (!hasFiniteNumber(v)) return '—';
   return new Intl.NumberFormat('ru-RU', { style: 'currency', currency: 'RUB', maximumFractionDigits: 0 }).format(v);
 }
 
+/**
+ * Форматирует значение как проценты
+ * @param {number} v - Значение
+ * @param {string} mode - Режим ('auto', 'ratio', 'percent')
+ * @returns {string} Отформатированная строка
+ */
 export function formatPct(v, mode = 'auto') {
   if (!hasFiniteNumber(v)) return '—';
   const value = mode === 'ratio'
@@ -422,11 +590,21 @@ export function formatPct(v, mode = 'auto') {
   return `${value.toFixed(1)}%`;
 }
 
+/**
+ * Форматирует число
+ * @param {number} v - Значение
+ * @returns {string} Отформатированная строка
+ */
 export function formatNum(v) {
   if (!hasFiniteNumber(v)) return '—';
   return new Intl.NumberFormat('ru-RU', { maximumFractionDigits: 1 }).format(v);
 }
 
+/**
+ * Проверяет, недостижима ли точка безубыточности
+ * @param {Object} result - Результаты расчета
+ * @returns {boolean} true, если точка безубыточности недостижима
+ */
 export function isBepUnreachable(result) {
   return !result?.isProfitable || (hasFiniteNumber(result?.contribution) && result.contribution <= 0);
 }

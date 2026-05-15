@@ -244,6 +244,21 @@ describe('calculator view model', () => {
     assert.equal(view.bep.display, '0 шт.');
   });
 
+  it('uses persisted snake_case BEP before assuming no fixed expenses', () => {
+    const view = buildCalculatorViewModel(
+      { fixed_monthly: 10000 },
+      {
+        contribution: 200,
+        is_profitable: true,
+        bep_units: 50,
+      },
+    );
+
+    assert.equal(view.bep.isReachable, true);
+    assert.equal(view.bep.units, 50);
+    assert.equal(view.bep.display, '50 шт.');
+  });
+
   it('keeps negative monthly profit visible instead of clamping it to zero', () => {
     const form = {
       price: 100,
