@@ -22,6 +22,21 @@ const finiteNumber = (value, fallback = 0) => (
   typeof value === 'number' && Number.isFinite(value) ? value : fallback
 );
 
+const finiteMetric = (source, keys, fallback = 0) => {
+  for (const key of keys) {
+    const value = source?.[key];
+    if (typeof value === 'number' && Number.isFinite(value)) return value;
+  }
+  return fallback;
+};
+
+const booleanMetric = (source, keys, fallback) => {
+  for (const key of keys) {
+    if (typeof source?.[key] === 'boolean') return source[key];
+  }
+  return fallback;
+};
+
 const positiveNumber = (value) => {
   const parsed = Number(value);
   return Number.isFinite(parsed) && parsed > 0 ? parsed : undefined;
@@ -47,8 +62,20 @@ export function getLogisticsSensitivityField(form = {}) {
 }
 
 export function buildBepView(result = {}) {
-  const contribution = finiteNumber(result.contribution);
-  const fixedMonthlyTotal = finiteNumber(result.fixedMonthlyTotal);
+  const contribution = finiteMetric(result, ['contribution']);
+  const fixedMonthlyTotal = finiteMetric(result, ['fixedMonthlyTotal', 'fixed_monthly_total']);
+  const bepUnits = finiteMetric(result, ['bepUnits', 'bep_units'], undefined);
+  const isProfitable = booleanMetric(result, ['isProfitable', 'is_profitable'], contribution > 0);
+
+  if (isProfitable && Number.isFinite(bepUnits)) {
+    const units = Math.ceil(bepUnits);
+    return {
+      isReachable: true,
+      units,
+      display: `${units} шт.`,
+      status: 'reachable',
+    };
+  }
 
   if (contribution > 0 && fixedMonthlyTotal <= 0) {
     return {
@@ -56,16 +83,6 @@ export function buildBepView(result = {}) {
       units: 0,
       display: '0 шт.',
       status: 'no_fixed_costs',
-    };
-  }
-
-  if (result.isProfitable && Number.isFinite(result.bepUnits)) {
-    const units = Math.ceil(result.bepUnits);
-    return {
-      isReachable: true,
-      units,
-      display: `${units} шт.`,
-      status: 'reachable',
     };
   }
 

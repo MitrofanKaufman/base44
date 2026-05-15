@@ -27,6 +27,10 @@ import {
 
 dotenv.config();
 
+/**
+ * Express приложение для API сервера
+ * @type {express.Application}
+ */
 const app = express();
 app.use(helmet());
 app.use(cors({
@@ -37,6 +41,10 @@ app.use(cookieParser());
 app.use(express.json({ limit: '5mb' }));
 app.use(morgan('combined'));
 
+/**
+ * Rate limiter для авторизационных запросов
+ * @type {rateLimit.RateLimit}
+ */
 const authRateLimiter = rateLimit({
   windowMs: Number(process.env.AUTH_RATE_LIMIT_WINDOW_MS || 15 * 60 * 1000),
   limit: Number(process.env.AUTH_RATE_LIMIT_MAX || 20),
@@ -44,6 +52,10 @@ const authRateLimiter = rateLimit({
   legacyHeaders: false,
 });
 
+/**
+ * Rate limiter для запросов синхронизации Wildberries
+ * @type {rateLimit.RateLimit}
+ */
 const wbSyncRateLimiter = rateLimit({
   windowMs: Number(process.env.WB_SYNC_RATE_LIMIT_WINDOW_MS || 60 * 1000),
   limit: Number(process.env.WB_SYNC_RATE_LIMIT_MAX || 30),
@@ -51,8 +63,18 @@ const wbSyncRateLimiter = rateLimit({
   legacyHeaders: false,
 });
 
+/**
+ * Пул соединений с базой данных
+ * @type {import('pg').Pool}
+ */
 const pool = getPool();
 
+/**
+ * Преобразует запись из БД в формат API
+ * @param {Object} def - Определение сущности
+ * @param {Object} row - Запись из БД
+ * @returns {Object} Запись в формате API
+ */
 const toApiRecord = (def, row) => {
   const out = {};
   for (const [apiField, meta] of Object.entries(def.fields)) {
@@ -61,6 +83,13 @@ const toApiRecord = (def, row) => {
   return out;
 };
 
+/**
+ * Преобразует значение из формата API в формат БД
+ * @param {Object} def - Определение сущности
+ * @param {string} apiField - Имя поля в формате API
+ * @param {*} value - Значение поля
+ * @returns {*} Значение в формате БД
+ */
 const toDbValue = (def, apiField, value) => {
   const type = def.fields[apiField]?.schema?.type;
   if ((type === 'object' || type === 'array') && value !== null && value !== undefined) {
@@ -69,6 +98,11 @@ const toDbValue = (def, apiField, value) => {
   return value;
 };
 
+/**
+ * Парсит JSON параметр из строки запроса
+ * @param {string} value - Строка с JSON
+ * @returns {*} Распарсенное значение или undefined
+ */
 const parseJsonParam = (value) => {
   if (!value) return undefined;
   try {
@@ -78,6 +112,12 @@ const parseJsonParam = (value) => {
   }
 };
 
+/**
+ * Преобразует параметр сортировки в SQL выражение
+ * @param {string} sortBy - Параметр сортировки из запроса
+ * @param {Object} def - Определение сущности
+ * @returns {string} SQL выражение для ORDER BY
+ */
 const toSort = (sortBy, def) => {
   const raw = sortBy || 'updated_date';
   const desc = raw.startsWith('-');
@@ -86,6 +126,11 @@ const toSort = (sortBy, def) => {
   return `${dbField} ${desc ? 'DESC' : 'ASC'}`;
 };
 
+/**
+ * Регистрирует CRUD маршруты для сущности
+ * @param {string} name - Имя сущности
+ * @param {Object} def - Определение сущности
+ */
 const registerEntity = (name, def) => {
   const base = `/entities/${name}`;
   const entityAuth = name === 'User' ? [requireAuth, requireRole('admin')] : [requireAuth];
@@ -198,35 +243,62 @@ const registerEntity = (name, def) => {
   });
 };
 
+/**
+ * Health check endpoint для проверки работоспособности API
+ */
 app.get('/healthz', async (_req, res) => {
   await pool.query('SELECT 1');
   res.json({ ok: true });
 });
 
+/**
+ * OpenAPI JSON спецификация (только для админов)
+ */
 app.get('/openapi.json', requireAuth, requireRole('admin'), (_req, res) => res.json(openapi));
+
+/**
+ * Swagger UI документация (только для админов)
+ */
 app.use('/docs', requireAuth, requireRole('admin'), swaggerUi.serve, swaggerUi.setup(openapi));
+
+// Регистрация маршрутов
 registerAuthRoutes(app, pool, { authRateLimiter });
 registerQueueRoutes(app, requireAuth, requireRole('admin'));
 registerAdminRoutes(app, pool, { requireAuth, requireRole, jobQueue });
 registerWildberriesRoutes(app, pool, requireAuth, { syncRateLimiter: wbSyncRateLimiter });
 
+// Регистрация CRUD маршрутов для всех сущностей
 for (const [name, def] of Object.entries(entityDefinitions)) {
   registerEntity(name, def);
 }
 
+/**
+ * Порт сервера
+ * @constant {number}
+ */
 const port = Number(process.env.PORT || 3000);
+
+/**
+ * Глобальный обработчик ошибок
+ */
 app.use((err, _req, res, _next) => {
   console.error('[api-error]', err);
   res.status(err.status || 500).json({ error: err.status ? err.message : 'internal server error' });
 });
 
+// Миграции схемы базы данных
 await pool.query('ALTER TABLE app_users ADD COLUMN IF NOT EXISTS password_hash TEXT');
 await pool.query("ALTER TABLE app_users ADD COLUMN IF NOT EXISTS onboarding_state JSONB NOT NULL DEFAULT '{}'::jsonb");
 await pool.query('ALTER TABLE calculations ADD COLUMN IF NOT EXISTS wb_report JSONB');
+
+// Инициализация таблиц
 await ensureWildberriesCollectionTables(pool);
 await ensureAdminTables(pool);
 await ensureSystemScheduledTaskTables(pool);
 
+/**
+ * Запуск сервера
+ */
 app.listen(port, () => {
   console.log(`API listening on ${port}`);
 });

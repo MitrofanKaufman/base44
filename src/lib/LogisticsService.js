@@ -3,19 +3,48 @@
  * Обрабатывает зависимости между схемой доставки, товаром, направлением и справочниками
  */
 
+/**
+ * Кеш тарифов для быстрого доступа
+ * @type {Object<string, Object>}
+ */
 const TARIFF_CACHE = {}; // кешируем тарифы для быстрого доступа
 
+/**
+ * Преобразует значение в число, возвращает 0 для невалидных значений
+ * @param {*} value - Значение для преобразования
+ * @returns {number} Число или 0
+ */
 const toNumber = (value) => {
   const parsed = Number(value);
   return Number.isFinite(parsed) && parsed > 0 ? parsed : 0;
 };
 
+/**
+ * Округляет денежное значение до 2 знаков
+ * @param {number} value - Значение для округления
+ * @returns {number} Округленное значение
+ */
 const roundMoney = (value) => Math.round(value * 100) / 100;
 
+/**
+ * Нормализует режим выполнения заказа
+ * @param {string} mode - Режим выполнения
+ * @returns {string} 'FBS' или 'FBO'
+ */
 const normalizeFulfillmentMode = (mode) => (mode === 'FBS' ? 'FBS' : 'FBO');
 
+/**
+ * Нормализует режим упаковки
+ * @param {string} mode - Режим упаковки
+ * @returns {string} 'pallet' или 'box'
+ */
 const normalizePackageMode = (mode) => (mode === 'pallet' ? 'pallet' : 'box');
 
+/**
+ * Возвращает первое определенное значение из списка
+ * @param {...*} values - Список значений
+ * @returns {*} Первое валидное значение или undefined
+ */
 const pickFirst = (...values) => {
   for (const value of values) {
     if (value !== undefined && value !== null && value !== '') return value;
@@ -23,8 +52,18 @@ const pickFirst = (...values) => {
   return undefined;
 };
 
+/**
+ * Проверяет, является ли значение объектом
+ * @param {*} value - Значение для проверки
+ * @returns {boolean} true, если это объект
+ */
 const isObject = (value) => value && typeof value === 'object' && !Array.isArray(value);
 
+/**
+ * Проверяет, является ли значение листом тарифа
+ * @param {*} value - Значение для проверки
+ * @returns {boolean} true, если это лист тарифа
+ */
 const isTariffLeaf = (value) => (
   isObject(value)
   && (
@@ -42,6 +81,13 @@ const isTariffLeaf = (value) => (
   )
 );
 
+/**
+ * Нормализует тариф к единому формату
+ * @param {Object} tariff - Исходный тариф
+ * @param {string} source - Источник тарифа
+ * @param {string} packageMode - Режим упаковки
+ * @returns {Object} Нормализованный тариф
+ */
 const normalizeTariff = (tariff, source, packageMode) => {
   const isPallet = packageMode === 'pallet';
   const hasPerUnitPalletValue = isPallet && (
@@ -89,6 +135,14 @@ const normalizeTariff = (tariff, source, packageMode) => {
   };
 };
 
+/**
+ * Разрешает вариант тарифа из структуры тарифов
+ * @param {Object} tariffs - Структура тарифов
+ * @param {string} mode - Режим выполнения
+ * @param {string} packageMode - Режим упаковки
+ * @param {string} palletType - Тип паллеты
+ * @returns {Object|null} Найденный тариф или null
+ */
 const resolveTariffVariant = (tariffs, mode, packageMode, palletType) => {
   if (!isObject(tariffs)) return null;
 
@@ -117,7 +171,10 @@ const resolveTariffVariant = (tariffs, mode, packageMode, palletType) => {
   return candidates.find(isTariffLeaf) || null;
 };
 
-// Стандартные размеры европаллеты и плановая высота загруженной паллеты.
+/**
+ * Стандартные размеры европаллеты и плановая высота загруженной паллеты
+ * @constant {Object}
+ */
 const STANDARD_PALLET_DIMENSIONS = {
   length_cm: 120,
   width_cm: 80,
@@ -160,6 +217,11 @@ export function getPalletDimensions() {
   return { ...STANDARD_PALLET_DIMENSIONS };
 }
 
+/**
+ * Вычисляет объем товара в литрах
+ * @param {Object} product - Данные товара
+ * @returns {number} Объем в литрах
+ */
 export function getProductVolumeLiters(product = {}) {
   const length = toNumber(product.size_length_cm ?? product.sizeLengthCm);
   const width = toNumber(product.size_width_cm ?? product.sizeWidthCm);
@@ -168,6 +230,11 @@ export function getProductVolumeLiters(product = {}) {
   return roundMoney((length * width * height) / 1000);
 }
 
+/**
+ * Вычисляет оплачиваемый вес товара (максимум из физического и объемного)
+ * @param {Object} product - Данные товара
+ * @returns {number} Оплачиваемый вес в кг
+ */
 export function getBillableWeightKg(product = {}) {
   const weightKg = toNumber(product.weight_kg ?? product.weightKg);
   const volumeLiters = getProductVolumeLiters(product);
