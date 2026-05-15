@@ -17,6 +17,7 @@ import { registerAdminRoutes } from './admin-routes.js';
 import { ensureAdminTables } from './admin-service.js';
 import { registerWildberriesRoutes } from './wildberries-routes.js';
 import { ensureWildberriesCollectionTables } from './wildberries-repository.js';
+import { ensureSystemScheduledTaskTables } from './system-scheduled-tasks.js';
 import {
   assertOwnedReferences,
   buildWhere,
@@ -220,8 +221,10 @@ app.use((err, _req, res, _next) => {
 });
 
 await pool.query('ALTER TABLE app_users ADD COLUMN IF NOT EXISTS password_hash TEXT');
+await pool.query('ALTER TABLE calculations ADD COLUMN IF NOT EXISTS wb_report JSONB');
 await ensureWildberriesCollectionTables(pool);
 await ensureAdminTables(pool);
+await ensureSystemScheduledTaskTables(pool);
 
 app.listen(port, () => {
   console.log(`API listening on ${port}`);

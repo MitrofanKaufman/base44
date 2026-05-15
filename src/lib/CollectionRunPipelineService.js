@@ -1,7 +1,6 @@
 // CollectionRunPipelineService - управляемый pipeline сбора и обработки маркетплейс-данных
 import { base44 } from '@/api/base44Client';
 import { apiRequest } from '@/api/base44Client';
-import { v4 as uuidv4 } from 'uuid';
 
 const STAGES = [
   'validate-input',
@@ -15,9 +14,25 @@ const STAGES = [
   'build-report'
 ];
 
+function createRunId() {
+  if (globalThis.crypto?.randomUUID) return globalThis.crypto.randomUUID();
+  return `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+}
+
+/**
+ * @param {any} startedAt
+ * @param {any} finishedAt
+ */
+function durationFrom(startedAt, finishedAt = new Date()) {
+  const started = new Date(startedAt).getTime();
+  const finished = finishedAt instanceof Date ? finishedAt.getTime() : new Date(finishedAt).getTime();
+  if (!Number.isFinite(started) || !Number.isFinite(finished)) return 0;
+  return Math.max(0, finished - started);
+}
+
 export class CollectionRunPipelineService {
   static async start(request) {
-    const runId = uuidv4();
+    const runId = createRunId();
     const startedAt = new Date().toISOString();
 
     // Создаем запись прогона
@@ -71,6 +86,7 @@ export class CollectionRunPipelineService {
       const context = {
         dbRunId,
         runId: runRecord.runId,
+        startedAt: runRecord.startedAt || new Date().toISOString(),
         request,
         data: {
           rawFrames: [],
@@ -81,6 +97,12 @@ export class CollectionRunPipelineService {
           errors: []
         }
       };
+
+      await base44.entities.IngestionRun.update(context.dbRunId, {
+        status: 'running',
+        progress: 0,
+        startedAt: context.startedAt,
+      });
 
       // 1. Validate input
       await this._executeStage(context, 'validate-input', () => 
@@ -134,14 +156,17 @@ export class CollectionRunPipelineService {
         status: 'completed',
         progress: 100,
         finishedAt: new Date().toISOString(),
-        durationMs: Date.now() - new Date(context.startedAt).getTime()
+        durationMs: durationFrom(context.startedAt)
       });
 
     } catch (error) {
       console.error('Pipeline failed:', error);
+      const failedRun = (await base44.entities.IngestionRun.filter({ id: dbRunId }))[0];
+      const finishedAt = new Date().toISOString();
       await base44.entities.IngestionRun.update(dbRunId, {
         status: 'failed',
-        finishedAt: new Date().toISOString()
+        finishedAt,
+        durationMs: durationFrom(failedRun?.startedAt, finishedAt)
       });
     }
   }
@@ -165,12 +190,14 @@ export class CollectionRunPipelineService {
       await fn();
       const stageFinished = new Date().toISOString();
       const durationMs = new Date(stageFinished).getTime() - new Date(stageStarted).getTime();
+      const latestRun = (await base44.entities.IngestionRun.filter({ id: context.dbRunId }))[0];
+      const latestTimeline = latestRun.timeline || timeline;
 
       // Обновляем завершенный этап
       await base44.entities.IngestionRun.update(context.dbRunId, {
-        timeline: timeline.map((t, i) =>
+        timeline: latestTimeline.map((t, i) =>
           i === stageIdx 
-            ? { ...t, status: 'completed', finishedAt: stageFinished, durationMs }
+            ? { ...t, status: 'completed', startedAt: t.startedAt || stageStarted, finishedAt: stageFinished, durationMs }
             : t
         ),
         progress: Math.round((stageIdx + 1) / STAGES.length * 100)
@@ -178,11 +205,13 @@ export class CollectionRunPipelineService {
     } catch (error) {
       const stageFinished = new Date().toISOString();
       const durationMs = new Date(stageFinished).getTime() - new Date(stageStarted).getTime();
+      const latestRun = (await base44.entities.IngestionRun.filter({ id: context.dbRunId }))[0];
+      const latestTimeline = latestRun.timeline || timeline;
 
       await base44.entities.IngestionRun.update(context.dbRunId, {
-        timeline: timeline.map((t, i) =>
+        timeline: latestTimeline.map((t, i) =>
           i === stageIdx
-            ? { ...t, status: 'failed', finishedAt: stageFinished, durationMs, error: error.message }
+            ? { ...t, status: 'failed', startedAt: t.startedAt || stageStarted, finishedAt: stageFinished, durationMs, error: error.message }
             : t
         ),
         status: 'failed'

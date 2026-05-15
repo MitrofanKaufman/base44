@@ -21,5 +21,6 @@ export function buildCalculationPayload(data, result, { productMap = {}, project
     contribution_pct: result.contributionPct,
     bep_units: view.bep.isReachable ? view.bep.units : null,
     is_profitable: result.isProfitable,
+    wb_report: view.wbReport,
   };
 }

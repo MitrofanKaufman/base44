@@ -1,0 +1,90 @@
+{
+  "projectName": "base44-app",
+  "projectType": "fullstack",
+  "frontend": {
+    "framework": "react",
+    "buildTool": "vite",
+    "styling": "tailwindcss",
+    "uiLibrary": "radix-ui",
+    "language": "javascript",
+    "typeChecking": "typescript"
+  },
+  "backend": {
+    "runtime": "node",
+    "framework": "custom",
+    "language": "javascript",
+    "api": "express-like"
+  },
+  "paths": {
+    "src": "src",
+    "backend": "backend",
+    "components": "src/components",
+    "pages": "src/pages",
+    "api": "src/api",
+    "lib": "src/lib",
+    "types": "src/types",
+    "backendSrc": "backend/src"
+  },
+  "aliases": {
+    "@": "src/*",
+    "@/components/ui/*": "src/types/ui-module-shim.d.ts"
+  },
+  "scripts": {
+    "dev": "npm run dev",
+    "build": "npm run build",
+    "test": "npm run test:unit-economics && npm run test:backend-access && npm run test:wb-logistics && npm run test:wb-collector",
+    "lint": "npm run lint",
+    "lint:fix": "npm run lint:fix",
+    "typecheck": "npm run typecheck"
+  },
+  "dependencies": {
+    "sdk": "@base44/sdk",
+    "stateManagement": "@tanstack/react-query",
+    "routing": "react-router-dom",
+    "forms": "react-hook-form",
+    "validation": "zod"
+  },
+  "testing": {
+    "framework": "node:test",
+    "unitEconomics": "src/lib/unitEconomics.test.mjs",
+    "backendAccess": [
+      "backend/src/entity-access.test.mjs",
+      "backend/src/production-config.test.mjs",
+      "backend/src/wildberries-routes.test.mjs",
+      "backend/src/admin-service.test.mjs",
+      "backend/src/scheduler-service.test.mjs",
+      "backend/src/system-scheduled-tasks.test.mjs"
+    ],
+    "wildberries": [
+      "backend/src/wildberries-seller-api.test.mjs",
+      "backend/src/wildberries-public-api.test.mjs"
+    ]
+  },
+  "docker": {
+    "services": ["postgres", "redis"],
+    "composeFile": "docker-compose.yml",
+    "prodComposeFile": "docker-compose.prod.yml"
+  },
+  "environment": {
+    "required": [
+      "VITE_API_BASE_URL",
+      "VITE_API_PROXY_TARGET",
+      "VITE_BASE44_APP_ID",
+      "VITE_BASE44_APP_BASE_URL"
+    ],
+    "optional": [
+      "VITE_CACHE_DIR",
+      "BASE44_LEGACY_SDK_IMPORTS"
+    ]
+  },
+  "codeStyle": {
+    "linter": "eslint",
+    "formatter": "eslint",
+    "configFile": "eslint.config.js"
+  },
+  "buildOutput": "dist",
+  "git": {
+    "mainBranch": "main",
+    "currentBranch": "unit-econ-donor-parity"
+  }
+}

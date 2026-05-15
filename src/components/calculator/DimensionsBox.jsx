@@ -1,4 +1,8 @@
 import { calcVolumeliters, isKgt } from '@/lib/unitEconomics';
+import { getPalletDimensions } from '@/lib/LogisticsService';
+
+const PALLET_DIMENSIONS = getPalletDimensions();
+const PALLET_USABLE_HEIGHT_CM = PALLET_DIMENSIONS.max_loaded_height_cm - PALLET_DIMENSIONS.height_cm;
 
 function BoxSVG({ l = 30, w = 20, h = 15 }) {
   const max = Math.max(l, w, h, 1);
@@ -38,7 +42,7 @@ function BoxSVG({ l = 30, w = 20, h = 15 }) {
 
 }
 
-function PalletSVG({ l = 120, w = 80, h = 150 }) {
+function PalletSVG({ l = 120, w = 80, h = 165 }) {
   const max = Math.max(l, w, h, 1);
   const BW = w / max * 60 + 28,BD = l / max * 36 + 14,BH = 10;
   const CW = BW * 0.9,CH = h / max * 50 + 14,CD = BD * 0.9;
@@ -71,9 +75,13 @@ function PalletSVG({ l = 120, w = 80, h = 150 }) {
 
 }
 
-export default function DimensionsBox({ l, w, h, weight, onChange: _onChange, mode = 'box' }) {
+export default function DimensionsBox({ l, w, h, weight, onChange: _onChange, mode = 'box', boxCount = 0 }) {
+  const isPallet = mode === 'pallet';
   const vol = calcVolumeliters(l, w, h);
-  const kgt = isKgt(weight, vol);
+  const kgt = !isPallet && isKgt(weight, vol);
+  const palletBoxCount = Number.isFinite(Number(boxCount)) && Number(boxCount) > 0
+    ? Math.floor(Number(boxCount))
+    : 0;
 
   return (
     <div className="bg-card rounded-[18px] border border-border shadow-warm-sm flex flex-col h-full" style={{ padding: '8px 10px', gap: 6 }}>
@@ -81,7 +89,11 @@ export default function DimensionsBox({ l, w, h, weight, onChange: _onChange, mo
       <div className="flex items-center justify-center bg-gradient-to-b from-secondary/20 to-accent/20 rounded-xl" style={{ width: '100%', height: '100px' }}>
         {mode === 'box' ?
         <BoxSVG l={l || 30} w={w || 20} h={h || 15} /> :
-        <PalletSVG l={l || 120} w={w || 80} h={h || 150} />
+        <PalletSVG
+          l={PALLET_DIMENSIONS.length_cm}
+          w={PALLET_DIMENSIONS.width_cm}
+          h={PALLET_USABLE_HEIGHT_CM}
+        />
         }
       </div>
 
@@ -101,9 +113,13 @@ export default function DimensionsBox({ l, w, h, weight, onChange: _onChange, mo
 
       
 
-      {vol != null &&
+      {((!isPallet && vol != null) || isPallet) &&
       <div className="flex items-center justify-between flex-shrink-0" style={{ paddingTop: 3, borderTop: '1px solid hsl(var(--border))' }}>
-          <span className="text-[9px] text-muted-foreground">Объём: <strong className="text-foreground">{vol.toFixed(1)} л</strong></span>
+          {!isPallet ? (
+            <span className="text-[9px] text-muted-foreground">Объём: <strong className="text-foreground">{vol.toFixed(1)} л</strong></span>
+          ) : (
+            <span className="text-[9px] text-muted-foreground">Коробок: <strong className="text-foreground">{palletBoxCount ? `${palletBoxCount} шт` : '—'}</strong></span>
+          )}
           <div className="flex gap-1">
             {kgt && <span className="bg-amber-50 text-amber-700 border border-amber-200 px-1 py-0.5 rounded text-[8px] font-bold">КГТ</span>}
             {mode === 'pallet' && <span className="bg-violet-50 text-violet-700 border border-violet-200 px-1 py-0.5 rounded text-[8px] font-bold">Паллет</span>}

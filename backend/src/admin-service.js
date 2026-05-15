@@ -1,8 +1,10 @@
 import os from 'node:os';
 import { randomUUID } from 'node:crypto';
+import { buildOperationalAlerts, readWorkerHealth } from './scheduler-service.js';
 
 const ONLINE_WINDOW_MINUTES = 5;
-const DEFAULT_ACTIVITY_SESSION_ID = 'default-session';
+const ACTIVITY_SESSION_ID_MAX_LENGTH = 120;
+const ACTIVITY_SESSION_TTL_HOURS = 8;
 const BROADCAST_AUDIENCES = new Set(['all', 'active_subscribers', 'paid_accounts', 'admins']);
 const BROADCAST_CADENCES = new Set(['once', 'daily', 'weekly', 'subscription_expiring']);
 const BROADCAST_CATEGORIES = new Set(['notification', 'reminder', 'system', 'billing']);
@@ -116,6 +118,23 @@ export async function ensureAdminTables(pool) {
   await pool.query('CREATE INDEX IF NOT EXISTS idx_user_activity_email_last_seen ON user_activity(user_email, last_seen_at DESC)');
 
   await pool.query(`
+    CREATE TABLE IF NOT EXISTS activity_sessions (
+      session_id TEXT PRIMARY KEY,
+      user_id TEXT,
+      user_email TEXT NOT NULL,
+      path TEXT,
+      user_agent TEXT,
+      ip_address TEXT,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+      last_seen_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+      expires_at TIMESTAMPTZ NOT NULL,
+      revoked_at TIMESTAMPTZ
+    )
+  `);
+  await pool.query('CREATE INDEX IF NOT EXISTS idx_activity_sessions_user ON activity_sessions(user_email, last_seen_at DESC)');
+  await pool.query('CREATE INDEX IF NOT EXISTS idx_activity_sessions_expires ON activity_sessions(expires_at)');
+
+  await pool.query(`
     CREATE TABLE IF NOT EXISTS admin_broadcasts (
       id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
       title TEXT NOT NULL,
@@ -131,6 +150,12 @@ export async function ensureAdminTables(pool) {
       created_by TEXT
     )
   `);
+  await pool.query('ALTER TABLE admin_broadcasts ADD COLUMN IF NOT EXISTS attempt_count NUMERIC NOT NULL DEFAULT 0');
+  await pool.query('ALTER TABLE admin_broadcasts ADD COLUMN IF NOT EXISTS max_attempts NUMERIC NOT NULL DEFAULT 1');
+  await pool.query('ALTER TABLE admin_broadcasts ADD COLUMN IF NOT EXISTS last_error TEXT');
+  await pool.query('ALTER TABLE admin_broadcasts ADD COLUMN IF NOT EXISTS last_error_at TIMESTAMPTZ');
+  await pool.query('ALTER TABLE admin_broadcasts ADD COLUMN IF NOT EXISTS recipient_count NUMERIC NOT NULL DEFAULT 0');
+  await pool.query('ALTER TABLE admin_broadcasts ADD COLUMN IF NOT EXISTS delivered_count NUMERIC NOT NULL DEFAULT 0');
   await pool.query('CREATE INDEX IF NOT EXISTS idx_admin_broadcasts_status_created ON admin_broadcasts(status, created_date DESC)');
 
   await pool.query(`
@@ -158,14 +183,34 @@ export async function ensureAdminTables(pool) {
       category TEXT NOT NULL DEFAULT 'notification',
       cadence TEXT NOT NULL DEFAULT 'once' CHECK (cadence IN ('once', 'daily', 'weekly', 'subscription_expiring')),
       filters JSONB NOT NULL DEFAULT '{}'::jsonb,
-      status TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('active', 'paused', 'canceled')),
+      status TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('active', 'paused', 'canceled', 'failed')),
       next_run_at TIMESTAMPTZ,
       last_run_at TIMESTAMPTZ,
+      last_attempt_at TIMESTAMPTZ,
+      last_error TEXT,
+      failure_count INTEGER NOT NULL DEFAULT 0,
       created_date TIMESTAMPTZ NOT NULL DEFAULT now(),
       updated_date TIMESTAMPTZ NOT NULL DEFAULT now(),
       created_by TEXT
     )
   `);
+  await pool.query(`
+    ALTER TABLE broadcast_schedules
+      DROP CONSTRAINT IF EXISTS broadcast_schedules_status_check
+  `);
+  await pool.query(`
+    ALTER TABLE broadcast_schedules
+      ADD CONSTRAINT broadcast_schedules_status_check
+      CHECK (status IN ('active', 'paused', 'canceled', 'failed'))
+  `);
+  await pool.query('ALTER TABLE broadcast_schedules ADD COLUMN IF NOT EXISTS last_attempt_at TIMESTAMPTZ');
+  await pool.query('ALTER TABLE broadcast_schedules ADD COLUMN IF NOT EXISTS last_error TEXT');
+  await pool.query('ALTER TABLE broadcast_schedules ADD COLUMN IF NOT EXISTS failure_count INTEGER NOT NULL DEFAULT 0');
+  await pool.query('ALTER TABLE broadcast_schedules ADD COLUMN IF NOT EXISTS attempt_count NUMERIC NOT NULL DEFAULT 0');
+  await pool.query('ALTER TABLE broadcast_schedules ADD COLUMN IF NOT EXISTS max_attempts NUMERIC NOT NULL DEFAULT 3');
+  await pool.query('ALTER TABLE broadcast_schedules ADD COLUMN IF NOT EXISTS last_error_at TIMESTAMPTZ');
+  await pool.query('ALTER TABLE broadcast_schedules ADD COLUMN IF NOT EXISTS recipient_count NUMERIC NOT NULL DEFAULT 0');
+  await pool.query('ALTER TABLE broadcast_schedules ADD COLUMN IF NOT EXISTS delivered_count NUMERIC NOT NULL DEFAULT 0');
   await pool.query('CREATE INDEX IF NOT EXISTS idx_broadcast_schedules_due ON broadcast_schedules(status, next_run_at)');
 }
 
@@ -293,13 +338,14 @@ export async function getAdminMetrics(pool, jobQueue) {
   );
   await pool.query("DELETE FROM admin_metric_snapshots WHERE created_at < now() - interval '90 days'");
 
-  const [db, maxLoad, bullQueue] = await Promise.all([
+  const [db, maxLoad, bullQueue, workers] = await Promise.all([
     readScalarMetrics(pool),
     readMaxLoad(pool),
     readBullQueueCounts(jobQueue),
+    readWorkerHealth(pool),
   ]);
 
-  return {
+  const metrics = {
     sampledAt: system.sampledAt,
     system,
     database: {
@@ -332,7 +378,62 @@ export async function getAdminMetrics(pool, jobQueue) {
       onlineWindowMinutes: ONLINE_WINDOW_MINUTES,
     },
     maxLoad,
+    workers,
   };
+  metrics.alerts = buildOperationalAlerts(metrics);
+  return metrics;
+}
+
+export async function createActivitySession(pool, auth, payload = {}, headers = {}) {
+  const userEmail = auth?.email;
+  if (!userEmail) {
+    const error = new Error('Authenticated user email is required');
+    error.status = 400;
+    throw error;
+  }
+
+  const sessionId = randomUUID();
+  const path = String(payload.path || '/').slice(0, 500);
+  const userAgent = String(headers['user-agent'] || '').slice(0, 500);
+  const ipAddress = String(headers['x-forwarded-for'] || headers['x-real-ip'] || '').split(',')[0].trim().slice(0, 120);
+
+  const result = await pool.query(
+    `INSERT INTO activity_sessions (session_id, user_id, user_email, path, user_agent, ip_address, expires_at)
+     VALUES ($1, $2, $3, $4, $5, $6, now() + ($7::int * interval '1 hour'))
+     RETURNING session_id, user_email, path, created_at, last_seen_at, expires_at`,
+    [sessionId, auth.sub || null, userEmail, path, userAgent, ipAddress || null, ACTIVITY_SESSION_TTL_HOURS],
+  );
+
+  const session = result.rows[0];
+  return {
+    ...session,
+    sessionId: session.session_id,
+  };
+}
+
+async function assertActivitySession(pool, auth, sessionId) {
+  if (!sessionId) {
+    const error = new Error('Server-issued activity session is required');
+    error.status = 400;
+    throw error;
+  }
+
+  const result = await pool.query(
+    `SELECT session_id
+       FROM activity_sessions
+      WHERE user_email = $1
+        AND session_id = $2
+        AND revoked_at IS NULL
+        AND expires_at > now()
+      LIMIT 1`,
+    [auth.email, sessionId],
+  );
+
+  if (!result.rows[0]) {
+    const error = new Error('Unknown activity session');
+    error.status = 401;
+    throw error;
+  }
 }
 
 export async function recordUserActivity(pool, auth, payload = {}, headers = {}) {
@@ -343,9 +444,20 @@ export async function recordUserActivity(pool, auth, payload = {}, headers = {})
     throw error;
   }
 
-  const sessionId = String(payload.session_id || payload.sessionId || DEFAULT_ACTIVITY_SESSION_ID).slice(0, 120);
+  const sessionId = String(payload.session_id || payload.sessionId || '').slice(0, ACTIVITY_SESSION_ID_MAX_LENGTH);
+  await assertActivitySession(pool, auth, sessionId);
+
   const path = String(payload.path || '/').slice(0, 500);
   const userAgent = String(headers['user-agent'] || '').slice(0, 500);
+
+  await pool.query(
+    `UPDATE activity_sessions
+        SET path = $3,
+            user_agent = $4,
+            last_seen_at = now()
+      WHERE user_email = $1 AND session_id = $2`,
+    [userEmail, sessionId, path, userAgent],
+  );
 
   const result = await pool.query(
     `INSERT INTO user_activity (user_id, user_email, session_id, path, user_agent)
@@ -488,30 +600,49 @@ export async function sendBroadcast(pool, broadcastId) {
     throw error;
   }
 
-  const filters = normalizeFilters(broadcast.filters);
-  const recipients = await getBroadcastRecipients(pool, broadcast.audience, filters);
-  const delivered = await insertMessages(pool, recipients, {
-    broadcastId: broadcast.id,
-    title: broadcast.title,
-    body: broadcast.body,
-    category: normalizeCategory(broadcast.category),
-  });
+  try {
+    const filters = normalizeFilters(broadcast.filters);
+    const recipients = await getBroadcastRecipients(pool, broadcast.audience, filters);
+    const delivered = await insertMessages(pool, recipients, {
+      broadcastId: broadcast.id,
+      title: broadcast.title,
+      body: broadcast.body,
+      category: normalizeCategory(broadcast.category),
+    });
 
-  const updated = await pool.query(
-    `UPDATE admin_broadcasts
-        SET status = 'sent',
-            sent_at = now(),
-            updated_date = now()
-      WHERE id = $1
-      RETURNING *`,
-    [broadcast.id],
-  );
+    const updated = await pool.query(
+      `UPDATE admin_broadcasts
+          SET status = 'sent',
+              sent_at = now(),
+              attempt_count = attempt_count + 1,
+              recipient_count = $2,
+              delivered_count = $3,
+              last_error = NULL,
+              last_error_at = NULL,
+              updated_date = now()
+        WHERE id = $1
+        RETURNING *`,
+      [broadcast.id, recipients.length, delivered],
+    );
 
-  return {
-    broadcast: updated.rows[0],
-    recipients: recipients.length,
-    delivered,
-  };
+    return {
+      broadcast: updated.rows[0],
+      recipients: recipients.length,
+      delivered,
+    };
+  } catch (error) {
+    const message = error?.message || String(error);
+    await pool.query(
+      `UPDATE admin_broadcasts
+          SET attempt_count = attempt_count + 1,
+              last_error = $2,
+              last_error_at = now(),
+              updated_date = now()
+        WHERE id = $1`,
+      [broadcast.id, message],
+    );
+    throw error;
+  }
 }
 
 export async function listBroadcasts(pool, limit = 100) {
@@ -539,12 +670,13 @@ export async function createBroadcastSchedule(pool, payload = {}, auth = {}) {
   const category = normalizeCategory(payload.category || (cadence === 'subscription_expiring' ? 'reminder' : 'notification'));
   const nextRunAt = payload.next_run_at || payload.nextRunAt || new Date().toISOString();
   const filters = normalizeFilters(payload.filters);
+  const maxAttempts = Math.max(1, Math.min(10, toPositiveInt(payload.max_attempts ?? payload.maxAttempts, 3)));
 
   const result = await pool.query(
-    `INSERT INTO broadcast_schedules (title, body, audience, category, cadence, filters, next_run_at, created_by)
-     VALUES ($1, $2, $3, $4, $5, $6::jsonb, $7, $8)
+    `INSERT INTO broadcast_schedules (title, body, audience, category, cadence, filters, next_run_at, created_by, max_attempts)
+     VALUES ($1, $2, $3, $4, $5, $6::jsonb, $7, $8, $9)
      RETURNING *`,
-    [title, body, audience, category, cadence, JSON.stringify(filters), nextRunAt, auth.email || null],
+    [title, body, audience, category, cadence, JSON.stringify(filters), nextRunAt, auth.email || null, maxAttempts],
   );
 
   return result.rows[0];
@@ -584,55 +716,113 @@ export async function runBroadcastSchedule(pool, scheduleId) {
     return { schedule, recipients: 0, delivered: 0, skipped: true };
   }
 
-  const filters = normalizeFilters(schedule.filters);
-  const recipients = schedule.cadence === 'subscription_expiring'
-    ? await getSubscriptionExpiringRecipients(pool, filters)
-    : await getBroadcastRecipients(pool, schedule.audience, filters);
+  try {
+    const filters = normalizeFilters(schedule.filters);
+    const recipients = schedule.cadence === 'subscription_expiring'
+      ? await getSubscriptionExpiringRecipients(pool, filters)
+      : await getBroadcastRecipients(pool, schedule.audience, filters);
 
-  const broadcast = await createBroadcast(pool, {
-    title: schedule.title,
-    body: schedule.body,
-    audience: schedule.audience,
-    category: schedule.category,
-    filters,
-  }, { email: schedule.created_by });
+    const broadcast = await createBroadcast(pool, {
+      title: schedule.title,
+      body: schedule.body,
+      audience: schedule.audience,
+      category: schedule.category,
+      filters,
+    }, { email: schedule.created_by });
 
-  const delivered = await insertMessages(pool, recipients, {
-    broadcastId: broadcast.id,
-    title: schedule.title,
-    body: schedule.body,
-    category: normalizeCategory(schedule.category),
-  });
+    const delivered = await insertMessages(pool, recipients, {
+      broadcastId: broadcast.id,
+      title: schedule.title,
+      body: schedule.body,
+      category: normalizeCategory(schedule.category),
+    });
 
-  await pool.query(
-    `UPDATE admin_broadcasts
-        SET status = 'sent',
-            sent_at = now(),
-            updated_date = now()
-      WHERE id = $1`,
-    [broadcast.id],
-  );
+    await pool.query(
+      `UPDATE admin_broadcasts
+          SET status = 'sent',
+              sent_at = now(),
+              attempt_count = attempt_count + 1,
+              recipient_count = $2,
+              delivered_count = $3,
+              last_error = NULL,
+              last_error_at = NULL,
+              updated_date = now()
+        WHERE id = $1`,
+      [broadcast.id, recipients.length, delivered],
+    );
 
-  const nextRunAt = nextRunForCadence(schedule.cadence);
-  const nextStatus = nextRunAt ? 'active' : 'paused';
+    const nextRunAt = nextRunForCadence(schedule.cadence);
+    const nextStatus = nextRunAt ? 'active' : 'paused';
+    const updated = await pool.query(
+      `UPDATE broadcast_schedules
+          SET status = $2,
+              last_run_at = now(),
+              last_attempt_at = now(),
+              next_run_at = $3,
+              failure_count = 0,
+              attempt_count = 0,
+              last_error = NULL,
+              last_error_at = NULL,
+              recipient_count = $4,
+              delivered_count = $5,
+              updated_date = now()
+        WHERE id = $1
+        RETURNING *`,
+      [schedule.id, nextStatus, nextRunAt, recipients.length, delivered],
+    );
+
+    return {
+      schedule: updated.rows[0],
+      broadcast,
+      recipients: recipients.length,
+      delivered,
+      skipped: false,
+    };
+  } catch (error) {
+    const failedSchedule = await recordBroadcastScheduleFailure(pool, schedule.id, error);
+    return {
+      schedule: failedSchedule,
+      recipients: 0,
+      delivered: 0,
+      skipped: false,
+      error: error?.message || String(error),
+    };
+  }
+}
+
+export async function recordBroadcastScheduleFailure(pool, scheduleId, error, now = new Date()) {
+  const result = await pool.query('SELECT * FROM broadcast_schedules WHERE id = $1', [scheduleId]);
+  const schedule = result.rows[0];
+  if (!schedule) {
+    const notFound = new Error('Broadcast schedule not found');
+    notFound.status = 404;
+    throw notFound;
+  }
+
+  const failureCount = toNumber(schedule.failure_count) + 1;
+  const shouldPause = failureCount >= 5;
+  const backoffMinutes = Math.min(60, 5 * (2 ** Math.min(failureCount - 1, 4)));
+  const nextRunAt = shouldPause
+    ? null
+    : new Date(now.getTime() + backoffMinutes * 60_000).toISOString();
+  const message = error?.message || String(error);
+
   const updated = await pool.query(
     `UPDATE broadcast_schedules
         SET status = $2,
-            last_run_at = now(),
-            next_run_at = $3,
+            failure_count = failure_count + 1,
+            attempt_count = attempt_count + 1,
+            last_error = $3,
+            last_error_at = $4::timestamptz,
+            last_attempt_at = $4::timestamptz,
+            next_run_at = $5::timestamptz,
             updated_date = now()
       WHERE id = $1
       RETURNING *`,
-    [schedule.id, nextStatus, nextRunAt],
+    [schedule.id, shouldPause ? 'paused' : 'active', message, now.toISOString(), nextRunAt],
   );
 
-  return {
-    schedule: updated.rows[0],
-    broadcast,
-    recipients: recipients.length,
-    delivered,
-    skipped: false,
-  };
+  return updated.rows[0];
 }
 
 export async function processDueBroadcastSchedules(pool, now = new Date()) {
@@ -651,7 +841,8 @@ export async function processDueBroadcastSchedules(pool, now = new Date()) {
     try {
       results.push(await runBroadcastSchedule(pool, row.id));
     } catch (error) {
-      results.push({ id: row.id, error: error?.message || String(error) });
+      const schedule = await recordBroadcastScheduleFailure(pool, row.id, error, now);
+      results.push({ id: row.id, schedule, error: error?.message || String(error) });
     }
   }
   return results;

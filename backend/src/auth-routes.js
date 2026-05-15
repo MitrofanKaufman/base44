@@ -2,8 +2,28 @@ import bcrypt from 'bcryptjs';
 import { clearAuthCookie, requireAuth, requireRole, setAuthCookie, signAccessToken } from './auth.js';
 
 const roleOverrideAllowed = (process.env.ALLOW_ROLE_OVERRIDE || 'false') === 'true';
+const ALLOWED_ONBOARDING_TOURS = new Set(['calculator_intro']);
+const ALLOWED_ONBOARDING_STATUSES = new Set(['completed', 'skipped']);
 
 const withLimiter = (limiter) => (limiter ? [limiter] : []);
+
+function normalizeOnboardingState(value) {
+  return value && typeof value === 'object' && !Array.isArray(value) ? value : {};
+}
+
+function toSafeUser(user) {
+  if (!user) return null;
+  return {
+    id: user.id,
+    email: user.email,
+    full_name: user.full_name,
+    role: user.role,
+    created_date: user.created_date,
+    updated_date: user.updated_date,
+    created_by: user.created_by,
+    onboarding_state: normalizeOnboardingState(user.onboarding_state),
+  };
+}
 
 export function registerAuthRoutes(app, pool, options = {}) {
   app.post('/auth/register', ...withLimiter(options.authRateLimiter), async (req, res) => {
@@ -35,11 +55,11 @@ export function registerAuthRoutes(app, pool, options = {}) {
     const insert = await pool.query(
       `INSERT INTO app_users (email, full_name, role, password_hash, created_by)
        VALUES ($1, $2, $3, $4, $1)
-       RETURNING id, email, full_name, role, created_date, updated_date, created_by`,
+       RETURNING id, email, full_name, role, created_date, updated_date, created_by, onboarding_state`,
       [email, fullName, userRole, password_hash]
     );
 
-    const user = insert.rows[0];
+    const user = toSafeUser(insert.rows[0]);
     const token = signAccessToken(user);
     setAuthCookie(res, token);
     return res.status(201).json({ token, user });
@@ -53,7 +73,7 @@ export function registerAuthRoutes(app, pool, options = {}) {
     }
 
     const result = await pool.query(
-      'SELECT id, email, full_name, role, password_hash, created_date, updated_date, created_by FROM app_users WHERE lower(email) = lower($1)',
+      'SELECT id, email, full_name, role, password_hash, created_date, updated_date, created_by, onboarding_state FROM app_users WHERE lower(email) = lower($1)',
       [email]
     );
     const user = result.rows[0];
@@ -66,15 +86,7 @@ export function registerAuthRoutes(app, pool, options = {}) {
       return res.status(401).json({ error: 'invalid credentials' });
     }
 
-    const safeUser = {
-      id: user.id,
-      email: user.email,
-      full_name: user.full_name,
-      role: user.role,
-      created_date: user.created_date,
-      updated_date: user.updated_date,
-      created_by: user.created_by
-    };
+    const safeUser = toSafeUser(user);
 
     const token = signAccessToken(safeUser);
     setAuthCookie(res, token);
@@ -88,11 +100,11 @@ export function registerAuthRoutes(app, pool, options = {}) {
 
   app.get('/auth/me', requireAuth, async (req, res) => {
     const result = await pool.query(
-      'SELECT id, email, full_name, role, created_date, updated_date, created_by FROM app_users WHERE id = $1',
+      'SELECT id, email, full_name, role, created_date, updated_date, created_by, onboarding_state FROM app_users WHERE id = $1',
       [req.auth.sub]
     );
     if (!result.rows[0]) return res.status(404).json({ error: 'user not found' });
-    return res.json(result.rows[0]);
+    return res.json(toSafeUser(result.rows[0]));
   });
 
   app.put('/auth/me', requireAuth, async (req, res) => {
@@ -106,12 +118,49 @@ export function registerAuthRoutes(app, pool, options = {}) {
       `UPDATE app_users
        SET full_name = $1, updated_date = now()
        WHERE id = $2
-       RETURNING id, email, full_name, role, created_date, updated_date, created_by`,
+       RETURNING id, email, full_name, role, created_date, updated_date, created_by, onboarding_state`,
       [fullName, req.auth.sub]
     );
 
     if (!result.rows[0]) return res.status(404).json({ error: 'user not found' });
-    return res.json(result.rows[0]);
+    return res.json(toSafeUser(result.rows[0]));
+  });
+
+  app.patch('/auth/me/onboarding', requireAuth, async (req, res) => {
+    const tourKey = typeof req.body?.tour_key === 'string' ? req.body.tour_key.trim() : '';
+    const version = Number(req.body?.version);
+    const status = typeof req.body?.status === 'string' ? req.body.status.trim() : '';
+
+    if (!ALLOWED_ONBOARDING_TOURS.has(tourKey)) {
+      return res.status(400).json({ error: 'invalid tour_key' });
+    }
+
+    if (!Number.isInteger(version) || version < 1) {
+      return res.status(400).json({ error: 'invalid version' });
+    }
+
+    if (!ALLOWED_ONBOARDING_STATUSES.has(status)) {
+      return res.status(400).json({ error: 'invalid status' });
+    }
+
+    const completedAt = new Date().toISOString();
+    const nextTourState = {
+      version,
+      status,
+      completed_at: completedAt,
+    };
+
+    const result = await pool.query(
+      `UPDATE app_users
+       SET onboarding_state = COALESCE(onboarding_state, '{}'::jsonb) || jsonb_build_object($1::text, $2::jsonb),
+           updated_date = now()
+       WHERE id = $3
+       RETURNING id, email, full_name, role, created_date, updated_date, created_by, onboarding_state, password_hash`,
+      [tourKey, JSON.stringify(nextTourState), req.auth.sub]
+    );
+
+    if (!result.rows[0]) return res.status(404).json({ error: 'user not found' });
+    return res.json(toSafeUser(result.rows[0]));
   });
 
   app.get('/auth/admin-only', requireAuth, requireRole('admin'), (_req, res) => {

@@ -12,6 +12,49 @@ const toNumber = (value) => {
 
 const roundMoney = (value) => Math.round(value * 100) / 100;
 
+// Стандартные размеры европаллеты и плановая высота загруженной паллеты.
+const STANDARD_PALLET_DIMENSIONS = {
+  length_cm: 120,
+  width_cm: 80,
+  height_cm: 15,
+  max_loaded_height_cm: 180,
+};
+
+/**
+ * Рассчитать количество коробок на паллете на основе размеров коробки
+ * @param {object} box - размеры коробки {size_length_cm, size_width_cm, size_height_cm}
+ * @returns {number} - количество коробок на паллете
+ */
+export function calculateBoxesPerPallet(box = {}) {
+  const boxLength = toNumber(box.size_length_cm ?? box.sizeLengthCm);
+  const boxWidth = toNumber(box.size_width_cm ?? box.sizeWidthCm);
+  const boxHeight = toNumber(box.size_height_cm ?? box.sizeHeightCm);
+
+  if (!boxLength || !boxWidth || !boxHeight) return 0;
+
+  const palletLength = toNumber(box.pallet_length_cm ?? box.palletLengthCm) || STANDARD_PALLET_DIMENSIONS.length_cm;
+  const palletWidth = toNumber(box.pallet_width_cm ?? box.palletWidthCm) || STANDARD_PALLET_DIMENSIONS.width_cm;
+  const palletHeight = toNumber(box.pallet_height_cm ?? box.palletHeightCm) || STANDARD_PALLET_DIMENSIONS.height_cm;
+  const maxLoadedHeight = toNumber(box.max_loaded_height_cm ?? box.maxLoadedHeightCm) || STANDARD_PALLET_DIMENSIONS.max_loaded_height_cm;
+  const usableHeight = Math.max(0, maxLoadedHeight - palletHeight);
+
+  const boxesByBase = Math.max(
+    Math.floor(palletLength / boxLength) * Math.floor(palletWidth / boxWidth),
+    Math.floor(palletLength / boxWidth) * Math.floor(palletWidth / boxLength),
+  );
+  const tiers = Math.floor(usableHeight / boxHeight);
+
+  return boxesByBase * tiers;
+}
+
+/**
+ * Получить фиксированные размеры паллеты
+ * @returns {object} - {length_cm, width_cm, height_cm}
+ */
+export function getPalletDimensions() {
+  return { ...STANDARD_PALLET_DIMENSIONS };
+}
+
 export function getProductVolumeLiters(product = {}) {
   const length = toNumber(product.size_length_cm ?? product.sizeLengthCm);
   const width = toNumber(product.size_width_cm ?? product.sizeWidthCm);

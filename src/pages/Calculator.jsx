@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
 import { base44 } from '@/api/base44Client';
 import { calculate } from '@/lib/unitEconomics';
+import { calculateBoxesPerPallet } from '@/lib/LogisticsService';
 import { applyFulfillmentModeSeed, buildCalculatorSeed } from '@/lib/calculatorSeed';
 import { loadCalculatorDraft, removeCalculatorDraft, saveCalculatorDraft } from '@/lib/calculatorDraftStorage';
 import { buildCalculationPayload } from '@/lib/calculationPayload';
@@ -18,6 +19,7 @@ import MarketplaceDataSync from '@/components/calculator/MarketplaceDataSync';
 import FinancialSummary from '@/components/calculator/FinancialSummary';
 import UnitEconomicsPanel from '@/components/calculator/UnitEconomicsPanel';
 import CostBreakdownChart from '@/components/calculator/CostBreakdownChart';
+import WbReportPanel from '@/components/calculator/WbReportPanel';
 import VersionsPanel from '@/components/calculator/VersionsPanel';
 import ExportButton from '@/components/calculator/ExportButton';
 import SensitivityChart from '@/components/calculator/SensitivityChart';
@@ -29,6 +31,8 @@ import PriceHistoryChart from '@/components/calculator/PriceHistoryChart';
 const DEFAULT_FORM = {
   fulfillment_mode:    'FBO',
   package_mode:        'box',
+  wb_pallet_type:      'piece',
+  wb_boxes_per_pallet: 0,
   price:               0,
   wb_commission_pct:   15,
   tax_system:          'usn_income',
@@ -55,6 +59,18 @@ const DEFAULT_FORM = {
   monthly_plan:        0,
   wb_cabinet_price:    0,
   logistics_direction: 'moscow',
+  wb_sales_rub: 0,
+  wb_returns_rub: 0,
+  wb_sales_units: 0,
+  wb_cancellations_units: 0,
+  wb_commission_rub: 0,
+  wb_acquiring_rub: 0,
+  wb_logistics_delivery_rub: 0,
+  wb_logistics_return_rub: 0,
+  wb_payout_rub: 0,
+  wb_cogs_rub: 0,
+  wb_realized_rub: 0,
+  wb_total_net_profit_rub: 0,
 };
 
 const makeVersion = (name = 'Версия 1', form = DEFAULT_FORM) => ({ name, form });
@@ -115,6 +131,22 @@ export default function Calculator() {
       i === activeIdx ? { ...v, form: typeof updater === 'function' ? updater(v.form) : updater } : v
     ));
   }, [activeIdx]);
+  const boxesPerPallet = useMemo(() => {
+    if ((form.package_mode || 'box') !== 'pallet') return 0;
+
+    const manualCount = Number(form.wb_boxes_per_pallet);
+    if (Number.isFinite(manualCount) && manualCount > 0) {
+      return Math.floor(manualCount);
+    }
+
+    return calculateBoxesPerPallet(form);
+  }, [
+    form.package_mode,
+    form.size_length_cm,
+    form.size_width_cm,
+    form.size_height_cm,
+    form.wb_boxes_per_pallet,
+  ]);
   const directoriesMap = useMemo(() => {
     const bySource = {};
     logisticsDirectories.forEach(dir => {
@@ -475,7 +507,7 @@ export default function Calculator() {
       defaultSpan: 2,
       allowedSpans: [1, 2, 3, 'full'],
       children: (
-        <div className="grid grid-cols-1 lg:grid-cols-[160px_minmax(0,1fr)_180px] gap-3 lg:h-[160px]">
+        <div className="grid grid-cols-1 gap-3 lg:min-h-[288px] lg:grid-cols-[170px_minmax(0,1fr)_190px]">
           <div className="bg-card rounded-[18px] border border-border shadow-warm-sm flex flex-col items-center justify-center overflow-hidden gap-2 p-2 min-h-[150px] lg:min-h-0">
             {selectedProduct?.image_url ? (
               <img src={selectedProduct.image_url} alt={selectedProduct.name} className="w-full h-[100px] object-contain" />
@@ -515,6 +547,7 @@ export default function Calculator() {
             weight={form.weight_kg}
             onChange={setField}
             mode={form.package_mode || 'box'}
+            boxCount={boxesPerPallet}
           />
         </div>
       ),
@@ -546,45 +579,56 @@ export default function Calculator() {
       id: 'cost-breakdown',
       title: 'Структура затрат',
       defaultSpan: 1,
-      defaultRowSpan: 2,
+      allowedSpans: [1, 2, 3, 'full'],
       children: <CostBreakdownChart form={form} />,
     },
     {
       id: 'profit-structure',
       title: 'Структура прибыли',
-      defaultSpan: 2,
+      defaultSpan: 1,
+      allowedSpans: [1, 2, 3, 'full'],
       children: <ProfitStructureChart form={form} />,
     },
     {
       id: 'unit-economics',
       title: 'Юнит-экономика',
-      defaultSpan: 2,
+      defaultSpan: 1,
+      allowedSpans: [1, 2, 3, 'full'],
       children: <UnitEconomicsPanel form={form} result={result} />,
     },
     {
-      id: 'interactive-profit',
-      title: 'Влияние параметров',
-      defaultSpan: 2,
-      children: <InteractiveProfitChart form={form} result={result} />,
+      id: 'wb-report',
+      title: 'WB отчёт',
+      defaultSpan: 1,
+      allowedSpans: [1, 2, 3, 'full'],
+      children: <WbReportPanel form={form} />,
     },
     {
       id: 'price-history',
       title: 'История цен',
       defaultSpan: 2,
+      allowedSpans: [1, 2, 3, 'full'],
       children: <PriceHistoryChart productId={selectedProduct?.id} selectedProduct={selectedProduct} />,
+    },
+    {
+      id: 'interactive-profit',
+      title: 'Влияние параметров',
+      defaultSpan: 1,
+      allowedSpans: [1, 2, 3, 'full'],
+      children: <InteractiveProfitChart form={form} result={result} />,
     },
     {
       id: 'competitor-prices',
       title: 'Цены конкурентов',
-      defaultSpan: 'full',
+      defaultSpan: 2,
       allowedSpans: [2, 3, 'full'],
       children: <CompetitorPriceBlock form={form} myResult={result} />,
     },
     {
       id: 'sensitivity',
       title: 'Чувствительность',
-      defaultSpan: 'full',
-      allowedSpans: [2, 3, 'full'],
+      defaultSpan: 1,
+      allowedSpans: [1, 2, 3, 'full'],
       children: <SensitivityChart form={form} />,
     },
   ], [
@@ -617,12 +661,12 @@ export default function Calculator() {
             onRemove={removeVersion}
           />
         </div>
-        <div className="flex items-center justify-end gap-2">
+        <div className="grid grid-cols-2 gap-2 sm:flex sm:items-center sm:justify-end">
           <Button
             size="sm"
             onClick={saveActiveCalculation}
             disabled={!selectedProductId || saveCalculationMutation.isPending}
-            className="rounded-md"
+            className="w-full rounded-md sm:w-auto"
           >
             <Save className="w-4 h-4" />
             {saveCalculationMutation.isPending ? 'Сохранение...' : 'Сохранить'}

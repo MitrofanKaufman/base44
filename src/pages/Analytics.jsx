@@ -13,6 +13,8 @@ import StatusDistributionModal from '@/components/analytics/StatusDistributionMo
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { BarChart3, TrendingUp } from 'lucide-react';
+import { normalizeIngestionRuns } from '@/lib/ingestionRunCounters';
+import { readRunCounters } from '@/lib/ingestionRunCounters';
 
 const PERIODS = [
   { label: '7 дней', days: 7 },
@@ -40,9 +42,9 @@ const processAnalyticsData = (runs) => {
       };
     }
 
-    const counters = run.counters || {};
-    const events = counters.eventCount || 0;
-    const errors = counters.deadLetterCount || 0;
+    const counters = readRunCounters(run);
+    const events = counters.eventCount;
+    const errors = counters.deadLetterCount;
     const duration = run.durationMs || 0;
 
     dailyStats[date].totalEvents += events;
@@ -77,8 +79,8 @@ const calculateMetrics = (runs) => {
   });
 
   const calculateStats = (runSet) => {
-    const totalEvents = runSet.reduce((sum, r) => sum + (r.counters?.eventCount || 0), 0);
-    const totalErrors = runSet.reduce((sum, r) => sum + (r.counters?.deadLetterCount || 0), 0);
+    const totalEvents = runSet.reduce((sum, r) => sum + readRunCounters(r).eventCount, 0);
+    const totalErrors = runSet.reduce((sum, r) => sum + readRunCounters(r).deadLetterCount, 0);
     const avgExecutionTime = runSet.length > 0
       ? runSet.reduce((sum, r) => sum + (r.durationMs || 0), 0) / runSet.length / 1000
       : 0;
@@ -115,7 +117,7 @@ export default function Analytics() {
     queryKey: ['ingestion-runs-all'],
     queryFn: async () => {
       const runs = await base44.entities.IngestionRun.list('-startedAt', 500);
-      return runs || [];
+      return normalizeIngestionRuns(runs || []);
     },
   });
 
@@ -164,12 +166,12 @@ export default function Analytics() {
         bVal = b.status || '';
         break;
       case 'events':
-        aVal = a.counters?.eventCount || 0;
-        bVal = b.counters?.eventCount || 0;
+        aVal = readRunCounters(a).eventCount;
+        bVal = readRunCounters(b).eventCount;
         break;
       case 'errors':
-        aVal = a.counters?.deadLetterCount || 0;
-        bVal = b.counters?.deadLetterCount || 0;
+        aVal = readRunCounters(a).deadLetterCount;
+        bVal = readRunCounters(b).deadLetterCount;
         break;
       case 'duration':
         aVal = a.durationMs || 0;

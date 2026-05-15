@@ -117,6 +117,7 @@ export const entityDefinitions = {
       contribution_pct: { db: 'contribution_pct', schema: t.number('Contribution margin (%)') },
       bep_units: { db: 'bep_units', schema: t.number('Точка безубыточности (шт/мес)') },
       is_profitable: { db: 'is_profitable', schema: t.boolean('Прибыльная модель') },
+      wb_report: { db: 'wb_report', schema: t.object('Расчётные метрики WB отчёта') },
       id: { db: 'id', schema: t.string('Unique record identifier') },
       created_date: { db: 'created_date', schema: t.string('Record creation timestamp', { format: 'date-time' }) },
       updated_date: { db: 'updated_date', schema: t.string('Record last update timestamp', { format: 'date-time' }) },

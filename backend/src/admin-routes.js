@@ -1,4 +1,5 @@
 import {
+  createActivitySession,
   createBroadcast,
   createBroadcastSchedule,
   getAdminMetrics,
@@ -10,6 +11,14 @@ import {
   runBroadcastSchedule,
   sendBroadcast,
 } from './admin-service.js';
+import {
+  listScheduledTasks,
+  runScheduledTask,
+} from './system-scheduled-tasks.js';
+import {
+  getSyncStatus,
+  listSyncLogs,
+} from './scheduler-service.js';
 
 const route = (handler) => (req, res, next) => {
   Promise.resolve(handler(req, res, next)).catch(next);
@@ -27,6 +36,14 @@ export function registerAdminRoutes(app, pool, { requireAuth, requireRole, jobQu
     const activity = await recordUserActivity(pool, req.auth, req.body, req.headers);
     res.json({ ok: true, activity });
   }));
+
+  const createActivitySessionHandler = route(async (req, res) => {
+    const session = await createActivitySession(pool, req.auth, req.body, req.headers);
+    res.status(201).json({ ok: true, session });
+  });
+
+  app.post('/activity/session', requireAuth, createActivitySessionHandler);
+  app.post('/activity/sessions', requireAuth, createActivitySessionHandler);
 
   app.get('/messages', requireAuth, route(async (req, res) => {
     const data = await listUserMessages(pool, req.auth, req.query.limit);
@@ -70,5 +87,30 @@ export function registerAdminRoutes(app, pool, { requireAuth, requireRole, jobQu
   app.post('/admin/broadcast-schedules/:id/run', requireAuth, requireAdmin, route(async (req, res) => {
     const result = await runBroadcastSchedule(pool, req.params.id);
     res.json({ ok: true, ...result });
+  }));
+
+  app.get('/admin/scheduled-tasks', requireAuth, requireAdmin, route(async (_req, res) => {
+    const items = await listScheduledTasks(pool);
+    res.json({ ok: true, items });
+  }));
+
+  app.post('/admin/scheduled-tasks/:id/run', requireAuth, requireAdmin, route(async (req, res) => {
+    const result = await runScheduledTask(pool, req.params.id, {
+      trigger: 'manual',
+      jobQueue,
+      actorEmail: req.auth?.email,
+      locale: req.body?.locale || req.query?.locale || 'ru',
+    });
+    res.json(result);
+  }));
+
+  app.get('/admin/sync-logs', requireAuth, requireAdmin, route(async (req, res) => {
+    const items = await listSyncLogs(pool, req.query);
+    res.json({ ok: true, items });
+  }));
+
+  app.get('/admin/sync-status', requireAuth, requireAdmin, route(async (_req, res) => {
+    const status = await getSyncStatus(pool);
+    res.json(status);
   }));
 }

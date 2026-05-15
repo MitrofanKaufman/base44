@@ -214,6 +214,9 @@ export default function AdminOverview({ onSelectSection = noopSelectSection }) {
   const maxLoad = metrics?.maxLoad || {};
   const cpuTone = system.cpuLoadPct > 80 ? 'danger' : system.cpuLoadPct > 60 ? 'warning' : 'blue';
   const memoryTone = system.memoryLoadPct > 80 ? 'danger' : system.memoryLoadPct > 60 ? 'warning' : 'success';
+  const alerts = metrics?.alerts || [];
+  const workers = metrics?.workers || {};
+  const workerItems = workers.items || [];
 
   const dashboardBlocks = [
     {
@@ -319,6 +322,7 @@ export default function AdminOverview({ onSelectSection = noopSelectSection }) {
               <DetailRow label="Ошибки" value={formatNumber(failedJobs)} tone={failedJobs > 0 ? 'danger' : 'default'} />
               <DetailRow label="Завершены" value={formatNumber(completedJobs)} tone="success" />
               <DetailRow label="Delayed" value={formatNumber(bull.delayed)} />
+              <DetailRow label="Workers" value={`${formatNumber(workers.active)} active / ${formatNumber(workers.stale)} stale`} tone={workers.stale > 0 ? 'warning' : 'success'} />
             </div>
           </div>
         </ModulePanel>
@@ -464,6 +468,9 @@ export default function AdminOverview({ onSelectSection = noopSelectSection }) {
           </div>
           <div className="flex flex-wrap items-center gap-2">
             <Badge variant="outline">API process</Badge>
+            <Badge variant={workers.stale > 0 ? 'outline' : 'secondary'} className={workers.stale > 0 ? 'text-warning border-warning/40' : ''}>
+              Workers: {formatNumber(workers.active || workerItems.length)}
+            </Badge>
             {bull.unavailable ? (
               <Badge variant="outline" className="text-warning border-warning/40">BullMQ недоступна</Badge>
             ) : (
@@ -477,6 +484,28 @@ export default function AdminOverview({ onSelectSection = noopSelectSection }) {
           </div>
         </div>
       </Card>
+
+      {alerts.length > 0 && (
+        <Card className="p-4 border-warning/30 bg-warning/5">
+          <div className="flex items-center gap-2 text-warning">
+            <AlertTriangle className="w-4 h-4" />
+            <h3 className="font-semibold text-sm">Операционные алерты</h3>
+          </div>
+          <div className="mt-3 grid gap-2">
+            {alerts.map(alert => (
+              <div key={alert.code || alert.message} className="rounded-md border border-border/70 bg-card/70 px-3 py-2">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <span className="text-sm font-medium text-foreground">{alert.title || alert.code}</span>
+                  <Badge variant={alert.severity === 'critical' ? 'destructive' : 'outline'}>
+                    {alert.severity || 'warning'}
+                  </Badge>
+                </div>
+                <p className="text-xs text-muted-foreground mt-1">{alert.message}</p>
+              </div>
+            ))}
+          </div>
+        </Card>
+      )}
 
       <div
         className="grid gap-3"

@@ -4,6 +4,17 @@ export function getAdminMetrics() {
   return apiRequest('/admin/metrics');
 }
 
+export function getOpenApiSpec() {
+  return apiRequest('/openapi.json');
+}
+
+export function createActivitySession(payload = {}) {
+  return apiRequest('/activity/sessions', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  });
+}
+
 export function sendActivityHeartbeat(payload) {
   return apiRequest('/activity/heartbeat', {
     method: 'POST',
@@ -53,4 +64,26 @@ export function runBroadcastSchedule(scheduleId) {
   return apiRequest(`/admin/broadcast-schedules/${encodeURIComponent(scheduleId)}/run`, {
     method: 'POST',
   });
+}
+
+export function listScheduledTasks() {
+  return apiRequest('/admin/scheduled-tasks');
+}
+
+export function runScheduledTask(taskId) {
+  return apiRequest(`/admin/scheduled-tasks/${encodeURIComponent(taskId)}/run`, {
+    method: 'POST',
+  });
+}
+
+export function listSyncLogs(params = {}) {
+  const search = new URLSearchParams();
+  if (params.limit) search.set('limit', String(params.limit));
+  if (params.task_id || params.taskId) search.set('task_id', params.task_id || params.taskId);
+  const query = search.toString();
+  return apiRequest(`/admin/sync-logs${query ? `?${query}` : ''}`);
+}
+
+export function getSyncStatus() {
+  return apiRequest('/admin/sync-status');
 }

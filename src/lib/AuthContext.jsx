@@ -1,6 +1,5 @@
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import { base44 } from '@/api/base44Client';
-import { BackgroundSyncService } from '@/lib/BackgroundSyncService';
 import { startActivityHeartbeat, stopActivityHeartbeat } from '@/lib/activityHeartbeat';
 import { initializeSubscriptions } from '@/lib/initSubscriptions';
 
@@ -31,8 +30,6 @@ export const AuthProvider = ({ children }) => {
     setAuthChecked(true);
     setIsLoadingAuth(false);
 
-    BackgroundSyncService.stop();
-    BackgroundSyncService.start();
     startActivityHeartbeat();
 
     if (isAdminUser(currentUser)) {
@@ -62,7 +59,6 @@ export const AuthProvider = ({ children }) => {
           : error?.message || 'Требуется авторизация',
       });
       setIsLoadingAuth(false);
-      BackgroundSyncService.stop();
       stopActivityHeartbeat();
       return null;
     }
@@ -72,7 +68,6 @@ export const AuthProvider = ({ children }) => {
     checkUserAuth({ silent: true });
 
     return () => {
-      BackgroundSyncService.stop();
       stopActivityHeartbeat();
     };
   }, [checkUserAuth]);
@@ -102,7 +97,6 @@ export const AuthProvider = ({ children }) => {
       setAuthChecked(true);
       setAuthError(null);
       setIsLoadingAuth(false);
-      BackgroundSyncService.stop();
       stopActivityHeartbeat();
 
       if (shouldRedirect) {

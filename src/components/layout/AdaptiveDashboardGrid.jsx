@@ -27,10 +27,17 @@ import {
   TooltipTrigger,
 } from '@/components/ui/tooltip';
 import { cn } from '@/lib/utils';
+import { MASONRY_ROW_HEIGHT, useMasonryGrid } from '@/lib/useMasonryGrid';
 
-const LAYOUT_VERSION = 2;
+const LAYOUT_VERSION = 5;
 const DEFAULT_MIN_COLUMN_WIDTH = 300;
 const SPAN_SEQUENCE = [1, 2, 3, 'full'];
+const SPAN_LABELS = {
+  1: '1 колонка',
+  2: '2 колонки',
+  3: '3 колонки',
+  full: 'Вся строка',
+};
 
 function normalizeSpan(span, fallback = 1) {
   if (span === 'full') return 'full';
@@ -39,10 +46,18 @@ function normalizeSpan(span, fallback = 1) {
   return normalizeSpan(fallback, 1);
 }
 
+function normalizeAllowedSpan(span, item) {
+  const allowedSpans = item?.allowedSpans || SPAN_SEQUENCE;
+  const normalized = normalizeSpan(span, item?.defaultSpan);
+  if (allowedSpans.includes(normalized)) return normalized;
+  const fallback = normalizeSpan(item?.defaultSpan, allowedSpans[0]);
+  return allowedSpans.includes(fallback) ? fallback : allowedSpans[0];
+}
+
 function createDefaultLayout(items) {
   return items.map(item => ({
     id: item.id,
-    span: normalizeSpan(item.defaultSpan),
+    span: normalizeAllowedSpan(item.defaultSpan, item),
     collapsed: Boolean(item.defaultCollapsed),
   }));
 }
@@ -59,7 +74,7 @@ function reconcileLayout(layout, items) {
     seen.add(entry.id);
     nextLayout.push({
       id: entry.id,
-      span: normalizeSpan(entry.span, item.defaultSpan),
+      span: normalizeAllowedSpan(entry.span, item),
       collapsed: Boolean(entry.collapsed ?? item.defaultCollapsed),
     });
   });
@@ -69,7 +84,7 @@ function reconcileLayout(layout, items) {
     if (seen.has(item.id)) return;
     nextLayout.push({
       id: item.id,
-      span: normalizeSpan(item.defaultSpan),
+      span: normalizeAllowedSpan(item.defaultSpan, item),
       collapsed: Boolean(item.defaultCollapsed),
     });
   });
@@ -135,12 +150,17 @@ function getNextSpan(currentSpan, direction, allowedSpans = SPAN_SEQUENCE) {
   return allowedSpans[nextIndex];
 }
 
-/**
- * A small reusable button used throughout the dashboard grid for icons with tooltips.
- * It wraps the provided children in a Button component and automatically
- * attaches a tooltip describing the action. This helper exists to avoid
- * repetition when adding new control buttons to each grid item.
- */
+function getSpanControlState(currentSpan, allowedSpans = SPAN_SEQUENCE) {
+  const normalizedCurrent = normalizeSpan(currentSpan);
+  const currentIndex = allowedSpans.indexOf(normalizedCurrent);
+  const safeIndex = currentIndex >= 0 ? currentIndex : 0;
+  return {
+    label: SPAN_LABELS[allowedSpans[safeIndex]] || SPAN_LABELS[normalizedCurrent] || '',
+    canShrink: safeIndex > 0,
+    canGrow: safeIndex < allowedSpans.length - 1,
+  };
+}
+
 function TooltipIconButton({ label, children, className = undefined, ...props }) {
   return (
     <Tooltip>
@@ -166,19 +186,30 @@ function AdaptiveGridItem({
   isEditing,
   resizeItem,
   toggleItem,
+  compactMasonry,
+  registerItem,
+  rowSpan,
 }) {
   const canCollapse = item.disableCollapse !== true;
   const isCollapsed = canCollapse && item.collapsed;
+  const allowedSpans = item.allowedSpans || SPAN_SEQUENCE;
+  const spanControl = getSpanControlState(item.span, allowedSpans);
+  const setSectionRef = useCallback((node) => {
+    registerItem(item.id, node);
+  }, [item.id, registerItem]);
 
   return (
     <section
+      ref={setSectionRef}
+      data-calculator-grid-item={item.id}
       className={cn(
-        'min-w-0 transition-opacity',
+        'min-w-0 scroll-mt-20 transition-opacity',
         getSpanClass(item.span),
-        !isCollapsed && getRowSpanClass(item.defaultRowSpan),
+        !compactMasonry && !isCollapsed && getRowSpanClass(item.defaultRowSpan),
       )}
       style={{
         minHeight: item.minHeight,
+        ...(compactMasonry && rowSpan ? { gridRowEnd: `span ${rowSpan}` } : undefined),
       }}
     >
       {isEditing && (
@@ -186,16 +217,21 @@ function AdaptiveGridItem({
           <div className="inline-flex h-7 min-w-0 items-center gap-1 rounded-md px-2 text-xs font-medium text-muted-foreground">
             <GripVertical className="h-4 w-4 flex-shrink-0" />
             <span className="truncate">{item.title || item.id}</span>
+            <span className="hidden rounded bg-secondary px-1.5 py-0.5 text-[10px] font-semibold text-muted-foreground sm:inline">
+              {spanControl.label}
+            </span>
           </div>
           <div className="flex items-center gap-1">
             <TooltipIconButton
               label="Уменьшить ширину"
+              disabled={!spanControl.canShrink}
               onClick={() => resizeItem(item.id, -1)}
             >
               <Minimize2 className="h-4 w-4" />
             </TooltipIconButton>
             <TooltipIconButton
               label="Увеличить ширину"
+              disabled={!spanControl.canGrow}
               onClick={() => resizeItem(item.id, 1)}
             >
               <Maximize2 className="h-4 w-4" />
@@ -264,6 +300,7 @@ export default function AdaptiveDashboardGrid({
   title = 'Компоновка блоков',
   minColumnWidth = DEFAULT_MIN_COLUMN_WIDTH,
   desktopColumns = undefined,
+  compactMasonry = true,
   className = undefined,
 }) {
   const [isEditing, setIsEditing] = useState(false);
@@ -294,13 +331,18 @@ export default function AdaptiveDashboardGrid({
     }),
     [items, layout],
   );
+  const itemIds = useMemo(() => orderedItems.map(item => item.id), [orderedItems]);
+  const { rowSpans, registerItem } = useMasonryGrid({
+    enabled: compactMasonry,
+    itemIds,
+  });
 
   const resizeItem = useCallback((id, direction) => {
     const item = itemsById.get(id);
     const allowedSpans = item?.allowedSpans || SPAN_SEQUENCE;
     setLayout(currentLayout => currentLayout.map(layoutItem => (
       layoutItem.id === id
-        ? { ...layoutItem, span: getNextSpan(layoutItem.span, direction, allowedSpans) }
+        ? { ...layoutItem, span: getNextSpan(normalizeAllowedSpan(layoutItem.span, item), direction, allowedSpans) }
         : layoutItem
     )));
   }, [itemsById]);
@@ -320,9 +362,10 @@ export default function AdaptiveDashboardGrid({
     setLayout(createDefaultLayout(items));
   }, [items, storageKey]);
 
-  const gridStyle = desktopColumns
-    ? undefined
-    : { gridTemplateColumns: `repeat(auto-fit, minmax(${minColumnWidth}px, 1fr))` };
+  const gridStyle = {
+    ...(desktopColumns ? undefined : { gridTemplateColumns: `repeat(auto-fit, minmax(${minColumnWidth}px, 1fr))` }),
+    ...(compactMasonry ? { gridAutoRows: `${MASONRY_ROW_HEIGHT}px` } : undefined),
+  };
 
   return (
     <TooltipProvider delayDuration={150}>
@@ -353,7 +396,7 @@ export default function AdaptiveDashboardGrid({
 
         <div
           className={cn(
-            'grid items-start gap-3 transition-colors',
+            'grid grid-flow-row-dense auto-rows-min items-start gap-3 transition-colors',
             desktopColumns === 3 && 'grid-cols-1 md:grid-cols-2 xl:grid-cols-3',
           )}
           style={gridStyle}
@@ -365,6 +408,9 @@ export default function AdaptiveDashboardGrid({
               isEditing={isEditing}
               resizeItem={resizeItem}
               toggleItem={toggleItem}
+              compactMasonry={compactMasonry}
+              registerItem={registerItem}
+              rowSpan={rowSpans[item.id]}
             />
           ))}
         </div>

@@ -98,6 +98,7 @@ export function buildCalculatorSeed({
     ...defaultForm,
     fulfillment_mode: fulfillmentMode,
     package_mode: firstValue(inputs.package_mode, inputs.packageMode, defaultForm.package_mode),
+    wb_pallet_type: firstValue(inputs.wb_pallet_type, inputs.wbPalletType, defaultForm.wb_pallet_type),
     category,
     fixed_monthly: firstNumber(inputs.fixed_monthly, inputs.fixedMonthly, project?.fixed_monthly, defaultForm.fixed_monthly) ?? 0,
     logistics_direction: firstValue(inputs.logistics_direction, defaultForm.logistics_direction, 'moscow'),
@@ -109,6 +110,7 @@ export function buildCalculatorSeed({
   applyNumber(next, 'size_width_cm', productData.sizeWidthCm, productData.size_width_cm, inputs.size_width_cm, product?.size_width_cm);
   applyNumber(next, 'size_height_cm', productData.sizeHeightCm, productData.size_height_cm, inputs.size_height_cm, product?.size_height_cm);
   applyNumber(next, 'weight_kg', productData.weightKg, productData.weight_kg, inputs.weight_kg, product?.weight_kg);
+  applyNumber(next, 'wb_boxes_per_pallet', inputs.wb_boxes_per_pallet, inputs.wbBoxesPerPallet, defaultForm.wb_boxes_per_pallet);
   applyNumber(next, 'monthly_plan', inputs.monthly_plan, inputs.planUnitsMonthly, defaultForm.monthly_plan);
   applyNumber(next, 'tax_pct', inputs.tax_pct, inputs.taxPct, defaultForm.tax_pct);
   applyNumber(next, 'acquiring_pct', inputs.acquiring_pct, inputs.acquiringPct, defaultForm.acquiring_pct);

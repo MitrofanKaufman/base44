@@ -1,26 +1,17 @@
-import { Copy, CheckCircle } from 'lucide-react';
+import { Copy, CheckCircle, RefreshCw } from 'lucide-react';
 import { useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
+import { getOpenApiSpec } from '@/lib/adminApi';
 
 export default function AdminSwagger() {
   const [copied, setCopied] = useState(false);
-
-  const spec = {
-    openapi: '3.1.0',
-    info: { title: 'Маркетплейс-ядро API', version: '1.0.0' },
-    paths: {
-      '/ingestion-receive': {
-        post: {
-          summary: 'Receive marketplace events',
-          requestBody: {
-            required: true,
-            content: { 'application/json': { schema: { type: 'object' } } }
-          }
-        }
-      }
-    }
-  };
+  const { data: spec, isFetching, error } = useQuery({
+    queryKey: ['openapi-spec'],
+    queryFn: getOpenApiSpec,
+  });
 
   const handleCopy = () => {
+    if (!spec) return;
     navigator.clipboard.writeText(JSON.stringify(spec, null, 2));
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
@@ -29,11 +20,15 @@ export default function AdminSwagger() {
   return (
     <div className="space-y-4">
       <div className="bg-card rounded-lg border border-border p-6">
-        <div className="flex items-center justify-between mb-4">
-          <h2 className="text-lg font-semibold text-foreground">OpenAPI 3.1 Specification</h2>
+        <div className="flex items-center justify-between gap-3 mb-4">
+          <div>
+            <h2 className="text-lg font-semibold text-foreground">OpenAPI Specification</h2>
+            <p className="text-xs text-muted-foreground mt-1">Источник: backend endpoint /api/openapi.json</p>
+          </div>
           <button
             onClick={handleCopy}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-primary/10 text-primary text-xs font-semibold hover:bg-primary/20"
+            disabled={!spec}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-primary/10 text-primary text-xs font-semibold hover:bg-primary/20 disabled:opacity-50"
           >
             {copied ? (
               <>
@@ -48,13 +43,27 @@ export default function AdminSwagger() {
             )}
           </button>
         </div>
-        <pre className="bg-secondary/30 rounded p-4 font-mono text-xs overflow-auto max-h-96 text-foreground">
-          {JSON.stringify(spec, null, 2)}
-        </pre>
+
+        {isFetching && (
+          <div className="flex items-center gap-2 text-sm text-muted-foreground">
+            <RefreshCw className="w-4 h-4 animate-spin" />
+            Загрузка спецификации
+          </div>
+        )}
+        {error && (
+          <div className="text-sm text-destructive">
+            {error?.message || 'Не удалось загрузить OpenAPI specification'}
+          </div>
+        )}
+        {spec && (
+          <pre className="bg-secondary/30 rounded p-4 font-mono text-xs overflow-auto max-h-96 text-foreground">
+            {JSON.stringify(spec, null, 2)}
+          </pre>
+        )}
       </div>
 
       <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 text-sm text-blue-700">
-        Полный OpenAPI spec и примеры интеграции см. в <code>MARKETPLACE_CORE_README.md</code>
+        Интерактивная Swagger UI доступна по адресу <code>/api/docs</code>.
       </div>
     </div>
   );

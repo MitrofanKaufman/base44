@@ -91,6 +91,7 @@ CREATE TABLE IF NOT EXISTS calculations (
   contribution_pct NUMERIC,
   bep_units NUMERIC,
   is_profitable BOOLEAN,
+  wb_report JSONB,
   created_date TIMESTAMPTZ NOT NULL DEFAULT now(),
   updated_date TIMESTAMPTZ NOT NULL DEFAULT now(),
   created_by TEXT
@@ -328,6 +329,24 @@ CREATE INDEX IF NOT EXISTS idx_user_activity_last_seen
 CREATE INDEX IF NOT EXISTS idx_user_activity_email_last_seen
   ON user_activity(user_email, last_seen_at DESC);
 
+CREATE TABLE IF NOT EXISTS activity_sessions (
+  session_id TEXT PRIMARY KEY,
+  user_id TEXT,
+  user_email TEXT NOT NULL,
+  path TEXT,
+  user_agent TEXT,
+  ip_address TEXT,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  last_seen_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  expires_at TIMESTAMPTZ NOT NULL,
+  revoked_at TIMESTAMPTZ
+);
+
+CREATE INDEX IF NOT EXISTS idx_activity_sessions_user
+  ON activity_sessions(user_email, last_seen_at DESC);
+CREATE INDEX IF NOT EXISTS idx_activity_sessions_expires
+  ON activity_sessions(expires_at);
+
 CREATE TABLE IF NOT EXISTS admin_broadcasts (
   id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
   title TEXT NOT NULL,
@@ -338,6 +357,12 @@ CREATE TABLE IF NOT EXISTS admin_broadcasts (
   filters JSONB NOT NULL DEFAULT '{}'::jsonb,
   scheduled_at TIMESTAMPTZ,
   sent_at TIMESTAMPTZ,
+  attempt_count NUMERIC NOT NULL DEFAULT 0,
+  max_attempts NUMERIC NOT NULL DEFAULT 1,
+  last_error TEXT,
+  last_error_at TIMESTAMPTZ,
+  recipient_count NUMERIC NOT NULL DEFAULT 0,
+  delivered_count NUMERIC NOT NULL DEFAULT 0,
   created_date TIMESTAMPTZ NOT NULL DEFAULT now(),
   updated_date TIMESTAMPTZ NOT NULL DEFAULT now(),
   created_by TEXT
@@ -371,9 +396,17 @@ CREATE TABLE IF NOT EXISTS broadcast_schedules (
   category TEXT NOT NULL DEFAULT 'notification',
   cadence TEXT NOT NULL DEFAULT 'once' CHECK (cadence IN ('once', 'daily', 'weekly', 'subscription_expiring')),
   filters JSONB NOT NULL DEFAULT '{}'::jsonb,
-  status TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('active', 'paused', 'canceled')),
+  status TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('active', 'paused', 'canceled', 'failed')),
   next_run_at TIMESTAMPTZ,
   last_run_at TIMESTAMPTZ,
+  last_attempt_at TIMESTAMPTZ,
+  last_error TEXT,
+  last_error_at TIMESTAMPTZ,
+  failure_count INTEGER NOT NULL DEFAULT 0,
+  attempt_count NUMERIC NOT NULL DEFAULT 0,
+  max_attempts NUMERIC NOT NULL DEFAULT 3,
+  recipient_count NUMERIC NOT NULL DEFAULT 0,
+  delivered_count NUMERIC NOT NULL DEFAULT 0,
   created_date TIMESTAMPTZ NOT NULL DEFAULT now(),
   updated_date TIMESTAMPTZ NOT NULL DEFAULT now(),
   created_by TEXT
@@ -381,6 +414,98 @@ CREATE TABLE IF NOT EXISTS broadcast_schedules (
 
 CREATE INDEX IF NOT EXISTS idx_broadcast_schedules_due
   ON broadcast_schedules(status, next_run_at);
+
+CREATE TABLE IF NOT EXISTS scheduled_tasks (
+  id TEXT PRIMARY KEY,
+  name TEXT NOT NULL,
+  description TEXT,
+  cadence TEXT NOT NULL,
+  status TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('active', 'paused', 'disabled')),
+  next_run_at TIMESTAMPTZ,
+  last_run_at TIMESTAMPTZ,
+  last_status TEXT,
+  last_error TEXT,
+  last_error_at TIMESTAMPTZ,
+  locked_until TIMESTAMPTZ,
+  created_date TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_date TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS idx_scheduled_tasks_due
+  ON scheduled_tasks(status, next_run_at, locked_until);
+
+CREATE TABLE IF NOT EXISTS sync_logs (
+  id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
+  task_id TEXT NOT NULL,
+  task_name TEXT NOT NULL,
+  status TEXT NOT NULL CHECK (status IN ('running', 'success', 'failed', 'skipped')),
+  started_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  finished_at TIMESTAMPTZ,
+  duration_ms NUMERIC,
+  result JSONB,
+  error TEXT,
+  created_by TEXT,
+  created_date TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS idx_sync_logs_task_started
+  ON sync_logs(task_id, started_at DESC);
+CREATE INDEX IF NOT EXISTS idx_sync_logs_started
+  ON sync_logs(started_at DESC);
+
+CREATE TABLE IF NOT EXISTS system_scheduled_tasks (
+  id TEXT PRIMARY KEY,
+  name TEXT NOT NULL,
+  description TEXT,
+  cadence TEXT NOT NULL,
+  status TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('active', 'paused', 'disabled')),
+  next_run_at TIMESTAMPTZ,
+  last_run_at TIMESTAMPTZ,
+  last_status TEXT,
+  last_error TEXT,
+  last_result JSONB,
+  failure_count INTEGER NOT NULL DEFAULT 0,
+  locked_until TIMESTAMPTZ,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS idx_system_scheduled_tasks_due
+  ON system_scheduled_tasks(status, next_run_at, locked_until);
+
+CREATE TABLE IF NOT EXISTS system_task_runs (
+  id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
+  task_id TEXT NOT NULL REFERENCES system_scheduled_tasks(id) ON DELETE CASCADE,
+  trigger TEXT NOT NULL DEFAULT 'scheduled' CHECK (trigger IN ('scheduled', 'manual')),
+  status TEXT NOT NULL CHECK (status IN ('running', 'success', 'failed', 'skipped')),
+  started_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  finished_at TIMESTAMPTZ,
+  duration_ms NUMERIC,
+  result JSONB,
+  error TEXT,
+  created_by TEXT,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS idx_system_task_runs_task_started
+  ON system_task_runs(task_id, started_at DESC);
+CREATE INDEX IF NOT EXISTS idx_system_task_runs_started
+  ON system_task_runs(started_at DESC);
+
+CREATE TABLE IF NOT EXISTS worker_heartbeats (
+  worker_id TEXT PRIMARY KEY,
+  process_id NUMERIC,
+  queue_name TEXT,
+  host_name TEXT,
+  status TEXT NOT NULL DEFAULT 'running',
+  last_seen_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  metadata JSONB NOT NULL DEFAULT '{}'::jsonb,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS idx_worker_heartbeats_last_seen
+  ON worker_heartbeats(last_seen_at DESC);
 
 CREATE TABLE IF NOT EXISTS price_history (
   id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,

@@ -56,6 +56,7 @@ function statusLabel(status) {
     canceled: 'Отменено',
     active: 'Активно',
     paused: 'Пауза',
+    failed: 'Ошибка',
   }[status] || status;
 }
 
@@ -91,6 +92,7 @@ export default function AdminBroadcasts() {
     cadence: 'once',
     next_run_at: '',
     expiring_in_days: 3,
+    max_attempts: 3,
   });
 
   const { data: broadcastsData = { items: [] }, isFetching: isFetchingBroadcasts } = useQuery({
@@ -131,6 +133,7 @@ export default function AdminBroadcasts() {
         cadence: 'once',
         next_run_at: '',
         expiring_in_days: 3,
+        max_attempts: 3,
       });
     },
   });
@@ -170,6 +173,7 @@ export default function AdminBroadcasts() {
       filters: {
         expiring_in_days: Number(scheduleForm.expiring_in_days || 3),
       },
+      max_attempts: Number(scheduleForm.max_attempts || 3),
     });
   };
 
@@ -308,6 +312,16 @@ export default function AdminBroadcasts() {
                   />
                 </label>
               )}
+              <label className="space-y-1">
+                <span className="text-xs font-semibold text-muted-foreground">Попыток доставки</span>
+                <Input
+                  type="number"
+                  min="1"
+                  max="10"
+                  value={scheduleForm.max_attempts}
+                  onChange={event => setScheduleForm(form => ({ ...form, max_attempts: event.target.value }))}
+                />
+              </label>
             </div>
             <Button
               onClick={handleCreateSchedule}
@@ -347,6 +361,9 @@ export default function AdminBroadcasts() {
                 </div>
                 <div className="flex flex-wrap items-center justify-between gap-2 mt-3 text-xs text-muted-foreground">
                   <span>{broadcast.audience} · {formatDate(broadcast.created_date)}</span>
+                  <span>
+                    Доставка: {broadcast.delivered_count || 0}/{broadcast.recipient_count || 0} · попытка {broadcast.attempt_count || 0}/{broadcast.max_attempts || 1}
+                  </span>
                   {broadcast.status !== 'sent' && (
                     <Button
                       size="sm"
@@ -360,6 +377,11 @@ export default function AdminBroadcasts() {
                     </Button>
                   )}
                 </div>
+                {broadcast.last_error && (
+                  <p className="text-xs text-destructive mt-2">
+                    {broadcast.last_error} {broadcast.last_error_at ? `· ${formatDate(broadcast.last_error_at)}` : ''}
+                  </p>
+                )}
               </div>
             ))}
           </div>
@@ -384,14 +406,21 @@ export default function AdminBroadcasts() {
                     <h4 className="font-semibold text-sm text-foreground truncate">{schedule.title}</h4>
                     <p className="text-xs text-muted-foreground mt-1 line-clamp-2">{schedule.body}</p>
                   </div>
-                  <Badge variant={schedule.status === 'active' ? 'secondary' : 'outline'}>
+                  <Badge variant={schedule.status === 'failed' ? 'destructive' : schedule.status === 'active' ? 'secondary' : 'outline'}>
                     {statusLabel(schedule.status)}
                   </Badge>
                 </div>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mt-3 text-xs text-muted-foreground">
                   <span>Сценарий: {schedule.cadence}</span>
                   <span>Следующий запуск: {formatDate(schedule.next_run_at)}</span>
+                  <span>Доставка: {schedule.delivered_count || 0}/{schedule.recipient_count || 0}</span>
+                  <span>Попытки: {schedule.attempt_count || 0}/{schedule.max_attempts || 3}</span>
                 </div>
+                {schedule.last_error && (
+                  <p className="text-xs text-destructive mt-2">
+                    {schedule.last_error} {schedule.last_error_at ? `· ${formatDate(schedule.last_error_at)}` : ''}
+                  </p>
+                )}
                 <div className="flex justify-end mt-3">
                   <Button
                     size="sm"

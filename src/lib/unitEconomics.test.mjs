@@ -3,6 +3,7 @@ import { describe, it } from 'node:test';
 
 import {
   calculate,
+  calculateWbReportMetrics,
   formatPct,
   normalizeUnitEconomicsInput,
 } from './unitEconomics.js';
@@ -14,8 +15,10 @@ import {
 } from './calculatorViewModel.js';
 import { calculateRecommendedPrice } from './priceRecommendation.js';
 import {
+  calculateBoxesPerPallet,
   calculateLogisticsCost,
   checkFulfillmentCompatibility,
+  getPalletDimensions,
 } from './LogisticsService.js';
 
 describe('unitEconomics donor parity', () => {
@@ -183,6 +186,40 @@ describe('unitEconomics donor parity', () => {
 });
 
 describe('calculator view model', () => {
+  it('calculates WB report metrics from statement formulas', () => {
+    const metrics = calculateWbReportMetrics({
+      wb_sales_rub: 10000,
+      wb_returns_rub: 1000,
+      wb_sales_units: 20,
+      wb_cancellations_units: 5,
+      wb_commission_rub: 900,
+      wb_acquiring_rub: 180,
+      wb_logistics_delivery_rub: 700,
+      wb_logistics_return_rub: 200,
+      wb_payout_rub: 7500,
+      wb_cogs_rub: 4000,
+      wb_realized_rub: 9500,
+      wb_total_net_profit_rub: 7000,
+      tax_pct: 6,
+    });
+
+    assert.equal(metrics.revenue, 9000);
+    assert.equal(metrics.avgSalePrice, 500);
+    assert.equal(metrics.buyoutPct, 0.8);
+    assert.equal(metrics.commissionPct, 0.1);
+    assert.equal(metrics.acquiringPct, 0.02);
+    assert.equal(metrics.totalLogistics, 900);
+    assert.equal(metrics.logisticsRevenuePct, 0.1);
+    assert.equal(metrics.wbDeductions, 1500);
+    assert.equal(metrics.taxBase, 9500);
+    assert.equal(metrics.taxAmount, 570);
+    assert.equal(metrics.netProfit, 2930);
+    assert.equal(metrics.profitPerUnit, 146.5);
+    assert.equal(metrics.profitSharePct, 2.3891);
+    assert.equal(metrics.profitMarginPct, 0.3256);
+    assert.equal(metrics.profitabilityPct, 0.7325);
+  });
+
   it('shows a zero BEP when contribution is positive and fixed expenses are absent', () => {
     const form = {
       price: 1000,
@@ -256,6 +293,7 @@ describe('calculator view model', () => {
 
     assert.equal(payload.bep_units, 0);
     assert.equal(payload.client_id, 'client-from-project');
+    assert.equal(payload.wb_report.revenue, 0);
   });
 
   it('preserves an existing client id when project and product maps do not resolve it', () => {
@@ -291,6 +329,24 @@ describe('calculator view model', () => {
 });
 
 describe('logistics calculations', () => {
+  it('calculates boxes per pallet with rotated base fit and usable stack height', () => {
+    const pallet = getPalletDimensions();
+    const boxesPerPallet = calculateBoxesPerPallet({
+      size_length_cm: 70,
+      size_width_cm: 40,
+      size_height_cm: 30,
+    });
+
+    assert.equal(pallet.length_cm, 120);
+    assert.equal(pallet.width_cm, 80);
+    assert.equal(pallet.height_cm, 15);
+    assert.equal(boxesPerPallet, 15);
+  });
+
+  it('returns zero pallet capacity when box dimensions are incomplete', () => {
+    assert.equal(calculateBoxesPerPallet({ size_length_cm: 30, size_width_cm: 20 }), 0);
+  });
+
   it('uses volumetric weight and dimensions for logistics and FBS compatibility', () => {
     const directoriesMap = {
       wildberries: [

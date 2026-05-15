@@ -1,10 +1,11 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { Box, ChevronDown, Megaphone, Minus, RefreshCw, ShieldCheck, Truck } from 'lucide-react';
+import { Box, ChevronDown, Megaphone, Minus, ReceiptText, RefreshCw, ShieldCheck, Truck } from 'lucide-react';
 import LogisticsSelector from './LogisticsSelector';
 import { calculateLogisticsCost, clearTariffCache } from '@/lib/LogisticsService';
 import { syncLogisticsDirectory, syncWbCommissionDirectory } from '@/lib/MarketplaceAPI';
 import { cn } from '@/lib/utils';
+import { MASONRY_ROW_HEIGHT, useMasonryGrid } from '@/lib/useMasonryGrid';
 
 const TAX_SYSTEMS = [
   { value: 'usn_income',         label: 'УСН Доходы',         hint: '% от выручки' },
@@ -13,7 +14,7 @@ const TAX_SYSTEMS = [
 
 const DEFAULT_TAX_PCT = { usn_income: 6, usn_income_expense: 15 };
 const COLLAPSED_STORAGE_KEY = 'base44:calculator:cost-input-sections:v1';
-const SECTION_IDS = ['costs', 'logistics', 'marketing', 'taxes'];
+const SECTION_IDS = ['costs', 'logistics', 'marketing', 'taxes', 'wb-report'];
 
 function readCollapsedSections() {
   if (typeof window === 'undefined') return {};
@@ -47,35 +48,58 @@ const NumField = ({ label, value, onChange, suffix = '₽', step = '1' }) => (
   </div>
 );
 
-const Section = ({ id, icon: IconComp, title, color, action = null, collapsed, onToggle, className, children }) => (
-  <section className={cn('bg-card rounded-[18px] border border-border shadow-warm-sm p-4 flex flex-col min-w-0 h-fit', className)}>
-    <div className={cn('flex items-center justify-between gap-2', !collapsed && 'mb-3')}>
-      <div className="flex items-center gap-1.5 min-w-0">
-        <div className={`w-5 h-5 rounded-md flex items-center justify-center flex-shrink-0 ${color}`}>
-          <IconComp className="w-3 h-3" />
+const Section = ({
+  id,
+  icon: IconComp,
+  title,
+  color,
+  action = null,
+  collapsed,
+  onToggle,
+  className,
+  masonryRowSpan,
+  registerMasonryItem,
+  children,
+}) => {
+  const setSectionRef = useCallback((node) => {
+    registerMasonryItem(id, node);
+  }, [id, registerMasonryItem]);
+
+  return (
+    <section
+      ref={setSectionRef}
+      className={cn('bg-card rounded-[18px] border border-border shadow-warm-sm p-4 flex flex-col min-w-0 h-fit', className)}
+      style={masonryRowSpan ? { gridRowEnd: `span ${masonryRowSpan}` } : undefined}
+    >
+      <div className={cn('flex items-center justify-between gap-2', !collapsed && 'mb-3')}>
+        <div className="flex items-center gap-1.5 min-w-0">
+          <div className={`w-5 h-5 rounded-md flex items-center justify-center flex-shrink-0 ${color}`}>
+            <IconComp className="w-3 h-3" />
+          </div>
+          <span className="text-[10px] font-bold uppercase tracking-widest text-foreground truncate">{title}</span>
         </div>
-        <span className="text-[10px] font-bold uppercase tracking-widest text-foreground truncate">{title}</span>
+        <div className="flex items-center gap-1 flex-shrink-0">
+          {action}
+          <button
+            type="button"
+            onClick={() => onToggle(id)}
+            title={collapsed ? `Развернуть блок «${title}»` : `Свернуть блок «${title}»`}
+            aria-label={collapsed ? `Развернуть блок ${title}` : `Свернуть блок ${title}`}
+            className="w-7 h-7 rounded-md border border-border bg-secondary/40 text-muted-foreground hover:text-foreground hover:bg-secondary transition-colors flex items-center justify-center"
+          >
+            {collapsed ? <ChevronDown className="w-3.5 h-3.5" /> : <Minus className="w-3.5 h-3.5" />}
+          </button>
+        </div>
       </div>
-      <div className="flex items-center gap-1 flex-shrink-0">
-        {action}
-        <button
-          type="button"
-          onClick={() => onToggle(id)}
-          title={collapsed ? `Развернуть блок «${title}»` : `Свернуть блок «${title}»`}
-          aria-label={collapsed ? `Развернуть блок ${title}` : `Свернуть блок ${title}`}
-          className="w-7 h-7 rounded-md border border-border bg-secondary/40 text-muted-foreground hover:text-foreground hover:bg-secondary transition-colors flex items-center justify-center"
-        >
-          {collapsed ? <ChevronDown className="w-3.5 h-3.5" /> : <Minus className="w-3.5 h-3.5" />}
-        </button>
-      </div>
-    </div>
-    {!collapsed && <div className="space-y-0">{children}</div>}
-  </section>
-);
+      {!collapsed && <div className="space-y-0">{children}</div>}
+    </section>
+  );
+};
 
 export default function CostInputsGrid({ form, setField, selectedProduct = null, selectedClientId = null, directoriesMap = null }) {
   const qc = useQueryClient();
   const [collapsedSections, setCollapsedSections] = useState(readCollapsedSections);
+  const { rowSpans, registerItem } = useMasonryGrid({ itemIds: SECTION_IDS });
   const effectiveDirectoriesMap = directoriesMap || {};
   const isFBS = form.fulfillment_mode === 'FBS';
   const syncMutation = useMutation({
@@ -146,7 +170,10 @@ export default function CostInputsGrid({ form, setField, selectedProduct = null,
 
   // Автоматически обновляем комиссию WB при смене товара
   return (
-    <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3 items-start">
+    <div
+      className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3 items-start"
+      style={{ gridAutoRows: `${MASONRY_ROW_HEIGHT}px` }}
+    >
 
       {/* СЕБЕСТОИМОСТЬ */}
       <Section
@@ -157,6 +184,8 @@ export default function CostInputsGrid({ form, setField, selectedProduct = null,
         collapsed={collapsedSections.costs}
         onToggle={toggleSection}
         className="xl:col-span-2"
+        masonryRowSpan={rowSpans.costs}
+        registerMasonryItem={registerItem}
       >
         <NumField label="Закупочная цена"     value={form.cogs_purchase}    onChange={v => setField('cogs_purchase', v)} />
         <NumField label="Упаковка"            value={form.cogs_packaging}   onChange={v => setField('cogs_packaging', v)} />
@@ -175,6 +204,8 @@ export default function CostInputsGrid({ form, setField, selectedProduct = null,
         collapsed={collapsedSections.logistics}
         onToggle={toggleSection}
         className=""
+        masonryRowSpan={rowSpans.logistics}
+        registerMasonryItem={registerItem}
         action={(
           <button
             type="button"
@@ -231,6 +262,8 @@ export default function CostInputsGrid({ form, setField, selectedProduct = null,
         collapsed={collapsedSections.marketing}
         onToggle={toggleSection}
         className=""
+        masonryRowSpan={rowSpans.marketing}
+        registerMasonryItem={registerItem}
       >
         <NumField label="Доля платного трафика" value={form.paid_share_pct} onChange={v => setField('paid_share_pct', v)} suffix="%" step="0.1" />
         <NumField label="CAC / платный заказ"   value={form.cac}            onChange={v => setField('cac', v)} />
@@ -247,6 +280,8 @@ export default function CostInputsGrid({ form, setField, selectedProduct = null,
         collapsed={collapsedSections.taxes}
         onToggle={toggleSection}
         className="xl:col-span-2"
+        masonryRowSpan={rowSpans.taxes}
+        registerMasonryItem={registerItem}
         action={(
           <button
             type="button"
@@ -301,6 +336,34 @@ export default function CostInputsGrid({ form, setField, selectedProduct = null,
             {commissionSyncMutation.error?.message || 'Ошибка синхронизации комиссий WB'}
           </div>
         )}
+      </Section>
+
+      {/* WB ОТЧЁТ */}
+      <Section
+        id="wb-report"
+        icon={ReceiptText}
+        title="WB отчёт"
+        color="bg-sky-100 text-sky-600"
+        collapsed={collapsedSections['wb-report']}
+        onToggle={toggleSection}
+        className="xl:col-span-3"
+        masonryRowSpan={rowSpans['wb-report']}
+        registerMasonryItem={registerItem}
+      >
+        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-x-4">
+          <NumField label="Продажи" value={form.wb_sales_rub} onChange={v => setField('wb_sales_rub', v)} />
+          <NumField label="Возврат" value={form.wb_returns_rub} onChange={v => setField('wb_returns_rub', v)} />
+          <NumField label="Итого продаж шт." value={form.wb_sales_units} onChange={v => setField('wb_sales_units', v)} suffix="шт." />
+          <NumField label="Отмены и невыкупы" value={form.wb_cancellations_units} onChange={v => setField('wb_cancellations_units', v)} suffix="шт." />
+          <NumField label="Комиссия руб" value={form.wb_commission_rub} onChange={v => setField('wb_commission_rub', v)} />
+          <NumField label="Эквайринг руб" value={form.wb_acquiring_rub} onChange={v => setField('wb_acquiring_rub', v)} />
+          <NumField label="Логистика доставок" value={form.wb_logistics_delivery_rub} onChange={v => setField('wb_logistics_delivery_rub', v)} />
+          <NumField label="Логистика возвратов" value={form.wb_logistics_return_rub} onChange={v => setField('wb_logistics_return_rub', v)} />
+          <NumField label="Оплата на Р/С" value={form.wb_payout_rub} onChange={v => setField('wb_payout_rub', v)} />
+          <NumField label="Себестоимость" value={form.wb_cogs_rub} onChange={v => setField('wb_cogs_rub', v)} />
+          <NumField label="WB реализовал" value={form.wb_realized_rub} onChange={v => setField('wb_realized_rub', v)} />
+          <NumField label="Чистая прибыль всего" value={form.wb_total_net_profit_rub} onChange={v => setField('wb_total_net_profit_rub', v)} />
+        </div>
       </Section>
     </div>
   );

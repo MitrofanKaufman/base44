@@ -7,7 +7,7 @@
     "dev": "vite",
     "build": "vite build",
     "test:unit-economics": "node --test src/lib/unitEconomics.test.mjs",
-    "test:backend-access": "node --test backend/src/entity-access.test.mjs backend/src/production-config.test.mjs backend/src/wildberries-routes.test.mjs backend/src/admin-service.test.mjs",
+    "test:backend-access": "node --test backend/src/entity-access.test.mjs backend/src/production-config.test.mjs backend/src/wildberries-routes.test.mjs backend/src/admin-service.test.mjs backend/src/scheduler-service.test.mjs backend/src/system-scheduled-tasks.test.mjs",
     "test:wb-logistics": "node --test backend/src/wildberries-seller-api.test.mjs",
     "test:wb-collector": "node --test backend/src/wildberries-public-api.test.mjs",
     "lint": "eslint . --quiet",
@@ -78,6 +78,7 @@
     "tailwind-merge": "^3.0.2",
     "tailwindcss-animate": "^1.0.7",
     "three": "^0.171.0",
+    "uuid": "^13.0.0",
     "vaul": "^1.1.2",
     "zod": "^3.24.2"
   },

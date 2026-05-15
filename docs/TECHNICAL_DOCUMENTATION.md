@@ -97,12 +97,13 @@ docs/           # документация
 - при успешном входе запускаются:
   - инициализация администратора (`AdminInitializer`);
   - инициализация подписок (`initSubscriptions`);
-  - фоновые задачи (`BackgroundSyncService`).
+  - серверная activity session и heartbeat (`activityHeartbeat`).
 
 Доступ к данным:
 
 - основной путь — `base44.entities.*` (CRUD по сущностям через Base44 SDK);
-- часть функций вызывает `base44.integrations.Core.InvokeLLM(...)` для enrichment и синхронизации данных.
+- production-синхронизация WB выполняется backend worker/scheduler через `/api/admin/scheduled-tasks`;
+- demo/enrichment сценарии отделены от production sync pipeline.
 
 ## 4.2 Backend (локальный API)
 
@@ -132,16 +133,11 @@ docs/           # документация
 
 ### В браузере (frontend runtime)
 
-- `BackgroundSyncService`:
-  - синхронизация логистических справочников (первый запуск через 30 сек, затем каждый час);
-  - синхронизация активных товаров (первый запуск через 1 мин, затем каждые 15 мин);
-  - запуск `SyncScheduler`.
-- `SyncScheduler`:
-  - периодическая синхронизация (default 30 мин);
-  - получение клиентов с wb_api_token;
-  - синхронизация продаж за последние 7 дней через WB Statistic API;
-  - параллельная загрузка актуальных цен и складских остатков;
-  - хранит логи в `localStorage`.
+- `activityHeartbeat`:
+  - получает server-issued `session_id` через `POST /api/activity/sessions`;
+  - отправляет heartbeat через `POST /api/activity/heartbeat`;
+  - не запускает WB sync timers.
+- `localStorage` используется только для локальных UI-настроек, например layout dashboard.
 
 ### На сервере
 
@@ -154,7 +150,12 @@ docs/           # документация
 - Broadcast scheduler:
   - проверка due broadcast schedules каждую минуту;
   - выполнение автоматических рассылок (daily, weekly, subscription_expiring);
+  - retry/backoff, сохранение `last_error`, пауза после 5 последовательных ошибок;
   - обновление next_run_at для следующей итерации.
+- System scheduled tasks:
+  - `wb-directories-sync` - ежедневно в 02:00 UTC;
+  - `wb-active-products-sync` - каждый час;
+  - результаты пишутся в `system_task_runs`, состояние хранится в `system_scheduled_tasks`.
 
 ### Схема архитектуры
 
@@ -232,7 +233,8 @@ graph TD
 - `backend/src/wildberries-public-api.js` - публичный API WB
 - `backend/src/wildberries-seller-api.js` - Seller API WB
 - `backend/src/wildberries-repository.js` - сохранение данных
-- `src/lib/WildberriesSync.js` - клиентская синхронизация
+- `backend/src/wildberries-directory-service.js` - переиспользуемая синхронизация WB справочников
+- `backend/src/system-scheduled-tasks.js` - серверные scheduled tasks
 - `src/lib/LogisticsService.js` - расчёт логистики
 - `src/lib/CommissionService.js` - определение комиссии
 
@@ -271,19 +273,17 @@ graph TD
 - Сохранение результатов в БД
 - UPDATE статуса на 'done' с progress = 100
 
-### Клиентская фоновая синхронизация (BackgroundSyncService)
-- Таймер синхронизации логистики: первый запуск через 30 сек, затем каждый час
-- Таймер синхронизации товаров: первый запуск через 1 мин, затем каждые 15 мин
-- Синхронизация каждого товара со статусом active
-- Обновление товара в БД с новыми ценами и временем синхронизации
-- Сохранение истории цен в price_history
+### Серверная фоновая синхронизация
+- `wb-directories-sync`: синхронизация WB logistics/commission справочников
+- `wb-active-products-sync`: постановка stale active товаров с `wb_sku` в BullMQ
+- Claim due tasks через `system_scheduled_tasks.locked_until`
+- Логи запусков и ошибок хранятся в `system_task_runs`
+- Worker heartbeat хранится в `worker_heartbeats` и попадает в admin alerts
 
-### Клиентская синхронизация продаж и цен (SyncScheduler)
-- Периодическая синхронизация (default 30 мин)
-- Получение клиентов с wb_api_token
-- Синхронизация продаж за последние 7 дней через WB Statistic API
-- Параллельная загрузка актуальных цен и складских остатков
-- Создание записей SalesData и PriceHistory
+### Demo/mock Collection Runner
+- Collection Runner остается интерактивным admin-инструментом для ручных прогонов
+- Dry run использует mock/fallback данные и не заменяет production backend scheduler
+- Admin/analytics views читают counters из `run.counters`, timeline из `run.timeline`
 
 ### Расчёт логистических затрат (LogisticsService)
 - Получение тарифов из справочника по direction_id
@@ -428,7 +428,7 @@ Runner управляется через UI:
 | Модуль | Ключевые файлы | Назначение |
 |---|---|---|
 | **Административная панель** | `Admin.jsx`, `AdminOverview.jsx`, `AdminBroadcasts.jsx`, `AdminCollectionRunner.jsx`, `AdminDashboardGrid.jsx` | Управление системой: метрики, рассылки, запуск сбора данных и настраиваемая сетка виджетов |
-| **Синхронизация Wildberries** | `wildberries-routes.js`, `wildberries-public-api.js`, `wildberries-seller-api.js`, `wildberries-repository.js`, `WildberriesSync.js`, `LogisticsService.js`, `CommissionService.js` | Сбор и обновление данных о товарах, логистических направлениях и комиссиях через API Wildberries |
+| **Синхронизация Wildberries** | `wildberries-routes.js`, `wildberries-public-api.js`, `wildberries-seller-api.js`, `wildberries-repository.js`, `wildberries-directory-service.js`, `system-scheduled-tasks.js`, `LogisticsService.js`, `CommissionService.js` | Сбор и обновление данных о товарах, логистических направлениях и комиссиях через API Wildberries |
 | **Юнит‑экономика** | `unitEconomics.js`, `Calculator.jsx` | Расчёт себестоимости, налогов, валовой прибыли, contribution margin и точки безубыточности |
 | **Collection Runner** | `CollectionRunPipelineService.js` | Реализация ETL‑pipeline ingestion и расчётов (см. схему выше) |
 | **Подписки и фичи** | `subscriptionService.js`, `initSubscriptions.js` | Управление тарифами, подписками и дополнительными возможностями пользователей |
@@ -564,6 +564,7 @@ Generic CRUD маршруты:
 - `NODE_ENV`
 - `WB_SELLER_API_TIMEOUT_MS` (default `15000`)
 - `BROADCAST_SCHEDULER_INTERVAL_MS` (default `60000`)
+- `SYSTEM_TASK_INTERVAL_MS` (default `60000`)
 
 ### Таблица переменных окружения
 
@@ -585,6 +586,7 @@ Generic CRUD маршруты:
 | **Backend** | `NODE_ENV` | Среда запуска (`production`/`development`) |
 | **Backend** | `WB_SELLER_API_TIMEOUT_MS` | Таймаут для Seller&nbsp;API (мс) |
 | **Backend** | `BROADCAST_SCHEDULER_INTERVAL_MS` | Интервал планировщика рассылок (мс) |
+| **Backend** | `SYSTEM_TASK_INTERVAL_MS` | Интервал планировщика system scheduled tasks (мс) |
 
 Эта таблица дублирует информацию из списков выше в компактном виде и помогает быстрее найти нужную переменную.
 
@@ -646,35 +648,97 @@ Wildberries API endpoints:
 Admin API endpoints:
 
 - `GET /admin/metrics` - получение системных метрик
+- `GET /admin/scheduled-tasks` - список backend sync задач
+- `POST /admin/scheduled-tasks/:id/run` - ручной запуск backend sync задачи
+- `GET /admin/sync-logs` - серверные логи sync задач
+- `GET /admin/sync-status` - статус sync subsystem
+- `POST /activity/sessions` - создание server-issued activity session
 - `POST /activity/heartbeat` - отправка heartbeat активности пользователя
 - `POST /admin/broadcasts` - создание рассылки
 
-## 11. Известные расхождения и риски <a name="section-11"></a>
+## 11. Stabilization state <a name="section-11"></a>
 
-Ниже перечислены фактические несоответствия, обнаруженные в кодовой базе:
+1. Canonical backend contract is `/api/*`; admin docs and OpenAPI are loaded from the Express backend.
+2. Browser-owned WB sync timers are disabled; backend worker owns scheduled sync.
+3. `IngestionRun` admin/analytics views normalize counters from `run.counters` and timeline from `run.timeline`.
+4. `uuid` is declared explicitly in the root dependencies.
+5. Production backend scheduler and demo/mock Collection Runner behavior are documented separately.
+6. Activity heartbeat requires a server-issued `session_id`.
+7. Broadcast schedule failures use retry/backoff and pause after five consecutive failures.
+8. WB directory sync is reusable backend service code and runs from scheduled tasks.
+9. Admin metrics include BullMQ, worker heartbeat health, stale worker alerts, failed jobs, and backlog alerts.
+10. System scheduled task execution history is stored server-side in `system_task_runs`.
 
-1. Админские разделы `AdminDocumentation` / `AdminSwagger` ссылаются на legacy endpoint `/functions/ingestion-receive`, но локальный backend реализует `/api/*` и не содержит `/functions/*`.
-2. `CollectionRunPipelineService` считает `durationMs` через `context.startedAt`, который не инициализируется в контексте (риск некорректной длительности).
-3. В `CollectionRunPipelineService` используется `import { v4 as uuidv4 } from 'uuid'`, но пакет `uuid` не объявлен явно в корневом `package.json` (риск окружений с иным hoisting).
-4. `AdminOverview` ожидает поля `eventsProcessed`/`eventsError` в корне `IngestionRun`, тогда как фактические счетчики хранятся в `run.counters`.
-5. `AdminScheduledTasks` отображает cron-like задачи в UI, но реальный серверный scheduler для этих задач в backend отсутствует.
-6. `SyncScheduler` и часть background-логики используют `localStorage`, то есть состояние живет на клиенте браузера, а не на сервере.
-7. В коде frontend часть функций синхронизации получает внешние данные через `InvokeLLM` (не deterministic источник), это нужно учитывать для production-процессов.
-8. Система heartbeat использует клиентскую отправку данных, что может быть подвержено манипуляциям и не отражает реальную активность при закрытом браузере.
-9. Broadcast scheduler работает в worker процессе, но не имеет механизма обработки ошибок и retry логики для неудачных рассылок.
-10. Справочники логистики и комиссий синхронизируются через Seller API, но нет механизма автоматического обновления при изменении тарифов WB.
+## 12. Operational endpoints <a name="section-12"></a>
 
-## 12. Рекомендации по стабилизации <a name="section-12"></a>
+- `GET /api/admin/metrics`
+- `GET /api/admin/scheduled-tasks`
+- `POST /api/admin/scheduled-tasks/:id/run`
+- `GET /api/admin/sync-logs?limit=&task_id=`
+- `GET /api/admin/sync-status`
+- `POST /api/activity/sessions`
+- `POST /api/activity/heartbeat`
 
-1. Унифицировать ingestion API: выбрать один контракт (`/api/...` или `/functions/...`) и привести админ-документацию/UI к нему.
-2. Перенести критические планировщики из браузера в backend worker/scheduler.
-3. Исправить модель `IngestionRun` в UI (единое чтение `counters` и timeline).
-4. Явно добавить `uuid` в зависимости frontend, если Collection Runner используется в runtime.
-5. Разделить в документации и UI:
-   - production pipeline с реальными интеграциями;
-   - demo/mock сценарии.
-6. Реализовать серверную систему heartbeat с валидацией session_id для более точного отслеживания активности.
-7. Добавить механизм retry и обработки ошибок для broadcast scheduler.
-8. Реализовать автоматическое обновление справочников логистики и комиссий по расписанию или при изменении тарифов WB.
-9. Добавить мониторинг и алерты для BullMQ очереди и worker процессов.
-10. Реализовать централизованное хранение логов синхронизации на сервере вместо localStorage.
+## Pinecone CI/CD Integration
+
+### Обзор
+
+Проект использует Pinecone Local для тестирования интеграции с векторной базой данных в CI/CD среде GitHub Actions. Это позволяет тестировать функциональность без подключения к продакшн аккаунту Pinecone.
+
+### Структура
+
+**GitHub Actions Workflow:** `.github/workflows/pinecone-local-tests.yml`
+
+- Запускает Pinecone Local как Docker сервис
+- Устанавливает зависимости бэкенда и фронтенда
+- Выполняет интеграционные тесты против локального экземпляра
+
+**Тесты:** `backend/tests/pinecone.integration.test.js`
+
+- Создание dense и sparse индексов
+- Upsert векторов
+- Query операции
+- Проверка статистики индексов
+
+### Запуск тестов локально
+
+```bash
+# Запустить Pinecone Local
+docker run -p 5080:5080 ghcr.io/pinecone-io/pinecone-local:latest
+
+# Установить зависимости
+cd backend
+npm install
+
+# Запустить тесты
+PINECONE_API_KEY=pclocal PINECONE_HOST=http://localhost:5080 npm run test:pinecone
+```
+
+### Ограничения Pinecone Local
+
+- Использует API версию 2025-01 (не последняя стабильная версия)
+- Доступен только в Docker
+- In-memory эмулятор - данные не сохраняются после остановки
+- Не требует аутентификации (API ключи игнорируются)
+- Максимум 100,000 записей на индекс
+- Не поддерживает: импорт из object storage, backup/restore, collections, namespace management, Pinecone Inference, Pinecone Assistant
+
+### Зависимости
+
+```json
+{
+  "dependencies": {
+    "@pinecone-database/pinecone": "^5.0.0"
+  },
+  "devDependencies": {
+    "jest": "^29.7.0"
+  }
+}
+```
+
+### Следующие шаги
+
+1. Создать продакшн индекс в Pinecone Cloud
+2. Настроить переменные окружения для продакшн
+3. Реализовать сервисный слой для работы с Pinecone в приложении
+4. Добавить функциональность для индексации документации проекта

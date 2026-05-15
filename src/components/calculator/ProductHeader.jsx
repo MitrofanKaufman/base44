@@ -59,6 +59,7 @@ const Seg = ({ label, options, value, onChange }) => (
 
 export default function ProductHeader({ products, selectedProduct, onSelect, form, setField }) {
   const [pickerOpen, setPickerOpen] = useState(false);
+  const isPallet = (form.package_mode || 'box') === 'pallet';
 
   return (
     <div className="bg-card rounded-[18px] border border-border shadow-warm-sm flex flex-col gap-2 h-full" style={{ padding: '10px 12px' }}>
@@ -135,9 +136,9 @@ export default function ProductHeader({ products, selectedProduct, onSelect, for
         <div className="flex flex-col gap-1.5 flex-1 justify-center min-w-0">
           <PriceInput label="План / мес." value={form.monthly_plan} onChange={v => setField('monthly_plan', v)} suffix="шт." />
           <div className="flex gap-1.5 flex-wrap">
-            <DimChip label="Длина"  value={form.size_length_cm} onChange={v => setField('size_length_cm', v)} />
-            <DimChip label="Ширина" value={form.size_width_cm}  onChange={v => setField('size_width_cm', v)} />
-            <DimChip label="Высота" value={form.size_height_cm} onChange={v => setField('size_height_cm', v)} />
+            <DimChip label={isPallet ? 'Дл. кор.' : 'Длина'}  value={form.size_length_cm} onChange={v => setField('size_length_cm', v)} />
+            <DimChip label={isPallet ? 'Шир. кор.' : 'Ширина'} value={form.size_width_cm}  onChange={v => setField('size_width_cm', v)} />
+            <DimChip label={isPallet ? 'Выс. кор.' : 'Высота'} value={form.size_height_cm} onChange={v => setField('size_height_cm', v)} />
             <DimChip label="Вес кг" value={form.weight_kg}      onChange={v => setField('weight_kg', v)} step="0.01" />
           </div>
         </div>

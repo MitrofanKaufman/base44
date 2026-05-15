@@ -330,6 +330,72 @@ export function calculate(input) {
   return calculateDonorUnitEconomics(input);
 }
 
+const divideOrUndefined = (numerator, denominator) => (
+  Number.isFinite(denominator) && denominator !== 0 ? numerator / denominator : undefined
+);
+
+export function calculateWbReportMetrics(input = {}) {
+  const salesRub = normalizeMoney(pick(input, ['wbSalesRub', 'wb_sales_rub', 'sales_rub']));
+  const returnsRub = normalizeMoney(pick(input, ['wbReturnsRub', 'wb_returns_rub', 'returns_rub']));
+  const soldUnits = normalizeMoney(pick(input, ['wbSalesUnits', 'wb_sales_units', 'sales_units', 'units_sold']));
+  const cancellationsUnits = normalizeMoney(pick(input, ['wbCancellationsUnits', 'wb_cancellations_units', 'cancellations_units']));
+  const commissionRub = normalizeMoney(pick(input, ['wbCommissionRub', 'wb_commission_rub', 'commission_rub']));
+  const acquiringRub = normalizeMoney(pick(input, ['wbAcquiringRub', 'wb_acquiring_rub', 'acquiring_rub']));
+  const deliveryLogisticsRub = normalizeMoney(pick(input, ['wbLogisticsDeliveryRub', 'wb_logistics_delivery_rub', 'logistics_delivery_rub']));
+  const returnLogisticsRub = normalizeMoney(pick(input, ['wbLogisticsReturnRub', 'wb_logistics_return_rub', 'logistics_return_rub']));
+  const payoutRub = normalizeMoney(pick(input, ['wbPayoutRub', 'wb_payout_rub', 'payout_rub']));
+  const cogsRub = normalizeMoney(pick(input, ['wbCogsRub', 'wb_cogs_rub', 'cogs_rub']));
+  const realizedRub = normalizeMoney(pick(input, ['wbRealizedRub', 'wb_realized_rub', 'realized_rub']), salesRub);
+  const totalNetProfitRub = normalizeMoney(pick(input, ['wbTotalNetProfitRub', 'wb_total_net_profit_rub', 'total_net_profit_rub']));
+  const taxPct = normalizePercent(pick(input, ['wbTaxPct', 'wb_tax_pct', 'tax_pct']));
+
+  const revenue = salesRub - returnsRub;
+  const avgSalePrice = divideOrUndefined(salesRub, soldUnits);
+  const buyoutPct = divideOrUndefined(soldUnits, soldUnits + cancellationsUnits);
+  const commissionPct = divideOrUndefined(commissionRub, revenue);
+  const acquiringPct = divideOrUndefined(acquiringRub, revenue);
+  const totalLogistics = deliveryLogisticsRub + returnLogisticsRub;
+  const logisticsRevenuePct = divideOrUndefined(totalLogistics, revenue);
+  const wbDeductions = revenue - payoutRub;
+  const taxBase = realizedRub;
+  const taxAmount = taxBase * (taxPct / 100);
+  const netProfit = payoutRub - taxAmount - cogsRub;
+  const profitPerUnit = divideOrUndefined(netProfit, soldUnits);
+  const profitSharePct = divideOrUndefined(totalNetProfitRub, netProfit);
+  const profitMarginPct = divideOrUndefined(netProfit, revenue);
+  const profitabilityPct = divideOrUndefined(netProfit, cogsRub);
+
+  return {
+    salesRub: round(salesRub),
+    returnsRub: round(returnsRub),
+    revenue: round(revenue),
+    soldUnits: round(soldUnits),
+    cancellationsUnits: round(cancellationsUnits),
+    avgSalePrice: avgSalePrice === undefined ? undefined : round(avgSalePrice),
+    buyoutPct: buyoutPct === undefined ? undefined : round(buyoutPct, 4),
+    commissionRub: round(commissionRub),
+    commissionPct: commissionPct === undefined ? undefined : round(commissionPct, 4),
+    acquiringRub: round(acquiringRub),
+    acquiringPct: acquiringPct === undefined ? undefined : round(acquiringPct, 4),
+    deliveryLogisticsRub: round(deliveryLogisticsRub),
+    returnLogisticsRub: round(returnLogisticsRub),
+    totalLogistics: round(totalLogistics),
+    logisticsRevenuePct: logisticsRevenuePct === undefined ? undefined : round(logisticsRevenuePct, 4),
+    payoutRub: round(payoutRub),
+    wbDeductions: round(wbDeductions),
+    cogsRub: round(cogsRub),
+    taxBase: round(taxBase),
+    taxPct: round(taxPct, 4),
+    taxAmount: round(taxAmount),
+    netProfit: round(netProfit),
+    profitPerUnit: profitPerUnit === undefined ? undefined : round(profitPerUnit),
+    totalNetProfitRub: round(totalNetProfitRub),
+    profitSharePct: profitSharePct === undefined ? undefined : round(profitSharePct, 4),
+    profitMarginPct: profitMarginPct === undefined ? undefined : round(profitMarginPct, 4),
+    profitabilityPct: profitabilityPct === undefined ? undefined : round(profitabilityPct, 4),
+  };
+}
+
 const hasFiniteNumber = (value) => typeof value === 'number' && Number.isFinite(value);
 
 export function ratioToPercent(value) {

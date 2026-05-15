@@ -1,4 +1,4 @@
-import { sendActivityHeartbeat } from '@/lib/adminApi';
+import { createActivitySession, sendActivityHeartbeat } from '@/lib/adminApi';
 
 const HEARTBEAT_INTERVAL_MS = 60_000;
 const SESSION_STORAGE_KEY = 'velocis_activity_session_id';
@@ -6,13 +6,8 @@ const SESSION_STORAGE_KEY = 'velocis_activity_session_id';
 let heartbeatTimer = null;
 
 function getSessionId() {
-  if (typeof window === 'undefined') return 'server-session';
-  const existing = window.sessionStorage.getItem(SESSION_STORAGE_KEY);
-  if (existing) return existing;
-
-  const id = globalThis.crypto?.randomUUID?.() || `${Date.now()}-${Math.random().toString(16).slice(2)}`;
-  window.sessionStorage.setItem(SESSION_STORAGE_KEY, id);
-  return id;
+  if (typeof window === 'undefined') return null;
+  return window.sessionStorage.getItem(SESSION_STORAGE_KEY);
 }
 
 function currentPayload() {
@@ -26,6 +21,9 @@ function currentPayload() {
 }
 
 async function sendHeartbeat() {
+  const sessionId = getSessionId();
+  if (!sessionId) return;
+
   try {
     await sendActivityHeartbeat(currentPayload());
   } catch {
@@ -33,9 +31,20 @@ async function sendHeartbeat() {
   }
 }
 
-export function startActivityHeartbeat() {
+export async function startActivityHeartbeat() {
   if (typeof window === 'undefined') return;
   stopActivityHeartbeat();
+  window.sessionStorage.removeItem(SESSION_STORAGE_KEY);
+
+  try {
+    const response = await createActivitySession(currentPayload());
+    const sessionId = response?.session?.sessionId || response?.session?.session_id;
+    if (!sessionId) return;
+    window.sessionStorage.setItem(SESSION_STORAGE_KEY, sessionId);
+  } catch {
+    return;
+  }
+
   sendHeartbeat();
   heartbeatTimer = window.setInterval(sendHeartbeat, HEARTBEAT_INTERVAL_MS);
 }
@@ -46,4 +55,5 @@ export function stopActivityHeartbeat() {
     window.clearInterval(heartbeatTimer);
     heartbeatTimer = null;
   }
+  window.sessionStorage.removeItem(SESSION_STORAGE_KEY);
 }

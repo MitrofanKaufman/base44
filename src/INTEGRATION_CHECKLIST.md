@@ -1,100 +1,51 @@
-# Чек-лист интеграции маркетплейс-ядра
+# Marketplace Runtime Integration Checklist
 
-## Pre-Launch
+## Backend API
 
-- [ ] **Upgrade to Builder+** — для создания backend function
-- [ ] **Set HMAC Secret** → `INGESTION_SECRET` в env vars
-- [ ] **Create backend function** `ingestion-receive.ts` (см. MARKETPLACE_CORE_README.md)
-- [ ] **Test HMAC verification** через Admin Dashboard → Swagger tab
-- [ ] **Verify all 8 entities** созданы и видны в Entity Manager
+- [ ] Local API is reachable through `/api`.
+- [ ] `/api/openapi.json` returns the backend OpenAPI document for an admin user.
+- [ ] `/api/docs` renders Swagger UI for an admin user.
+- [ ] Admin UI Swagger loads `/api/openapi.json`.
 
-## Admin Dashboard
+## Scheduled Work
 
-- [ ] **Access /admin** с администраторским аккаунтом
-- [ ] **Overview tab** показывает статистику (может быть 0 событий)
-- [ ] **Documentation tab** содержит 6 разделов
-- [ ] **Swagger tab** выводит OpenAPI spec
-- [ ] **Raw Frames tab** пуст (сработает после первого события)
-- [ ] **Dead Letters tab** пуст (или показывает первые ошибки)
-- [ ] **Snapshots tab** пуст до обработки product.update
-- [ ] **Settings tab** показывает HMAC и синхронизацию
+- [ ] `system_scheduled_tasks` and `system_task_runs` exist after backend startup.
+- [ ] `wb-directories-sync` is seeded and scheduled for `02:00 UTC`.
+- [ ] `wb-active-products-sync` is seeded and scheduled hourly.
+- [ ] Manual task runs work from Admin Dashboard -> Scheduled Tasks.
+- [ ] Worker processes due scheduled tasks on `SYSTEM_TASK_INTERVAL_MS` default `60000`.
+- [ ] Active WB products already queued or running are not enqueued again.
+- [ ] Missing shared WB token records a skipped directory run when no client tokens exist.
 
-## Backend Function
+## Wildberries Routes
 
-- [ ] **Создана функция** `/functions/ingestion-receive`
-- [ ] **Использует HmacSignatureVerifier** для проверки подписи
-- [ ] **Использует WbPayloadHasher** для детерминированного хеша
-- [ ] **Сохраняет RawMarketplaceFrame** с `processingStatus: 'processing'`
-- [ ] **Нормализует через NormalizerFactory** в MarketplaceEvent
-- [ ] **Обновляет ProductSnapshot** при product.update
-- [ ] **Логирует в IngestionRun** время начала/конца
-- [ ] **Обновляет SyncCursor** последним eventId
-- [ ] **Создаёт DeadLetter** при ошибке
+- [ ] `POST /api/wildberries/products/:productId/sync` updates one product through backend auth.
+- [ ] `POST /api/wildberries/clients/:clientId/logistics-directions/sync` syncs client logistics directories.
+- [ ] `POST /api/wildberries/clients/:clientId/commission-directory/sync` syncs client commission directories.
+- [ ] `POST /api/wildberries/directories/commission/sync` is admin-only.
 
-## Testing
+## Activity Heartbeat
 
-- [ ] **Test successful request** через curl/Postman с валидной подписью
-  - Expected: `200 { status: 'ok', payloadHash, traceId }`
-- [ ] **Test invalid signature** без подписи или с неправильной
-  - Expected: `401 Unauthorized`
-- [ ] **Test schema mismatch** с неподдерживаемым stream
-  - Expected: `422 Unprocessable Entity`
-- [ ] **Test raw frame** → проверь в Admin Dashboard → Raw Frames tab
-- [ ] **Test event processing** → проверь MarketplaceEvent в Admin Dashboard → Events tab
-- [ ] **Test product snapshot** → отправь product.update → проверь Snapshots tab
-- [ ] **Test error handling** → отправь невалидный payload → проверь Dead Letters tab
+- [ ] Client creates a session through `POST /api/activity/sessions` after auth.
+- [ ] Client stores only the opaque session id in `sessionStorage`.
+- [ ] `POST /api/activity/heartbeat` rejects unknown session ids for the authenticated user.
 
-## Production
+## Broadcasts
 
-- [ ] **HTTPS enabled** для `/functions/ingestion-receive`
-- [ ] **HMAC secret rotated** (не default значение)
-- [ ] **Rate limiting configured** на API Gateway
-- [ ] **Logging enabled** для всех ошибок
-- [ ] **Backup strategy** для DeadLetters
-- [ ] **Monitoring setup** для ingestion-receive latency
-- [ ] **Alert на критические ошибки** (signature_invalid, processing_error)
-- [ ] **Documentation shared** с маркетплейсами (endpoint, contract, signature format)
+- [ ] Failed scheduled broadcast attempts increment `failure_count`.
+- [ ] Failure state stores `last_error` and `last_attempt_at`.
+- [ ] Retries back off through `next_run_at`.
+- [ ] Five consecutive failures pause the schedule.
+- [ ] Successful runs clear failure state.
 
-## Marketplace Integration
+## Verification
 
-### Wildberries
-- [ ] **API endpoint URL** настроена в WB Seller Account
-- [ ] **Webhook secret** совпадает с `INGESTION_SECRET`
-- [ ] **Event streams** активированы (product.updates, seller.updates, orders)
-- [ ] **Test webhook** из WB панели
-
-### Яндекс.Маркет
-- [ ] **Партнёрский ID** настроен
-- [ ] **API ключ** добавлен в переменные окружения
-- [ ] **YandexProductNormalizer** создан (если расширяешь)
-
-### Ozon
-- [ ] **Seller ID** настроен
-- [ ] **API token** добавлен в переменные окружения
-- [ ] **OzonProductNormalizer** создан (если расширяешь)
-
-## Documentation
-
-- [ ] **README скопирована** в свою вики/документацию
-- [ ] **OpenAPI spec** экспортирована (из Admin Dashboard → Swagger)
-- [ ] **Dead Letter reasons** задокументированы в error handling docs
-- [ ] **Sync cursor strategy** объяснена для команды devops
-- [ ] **Rollback procedure** написана на случай сбоя
-
-## Go-Live
-
-- [ ] **Dry run** успешно завершён
-- [ ] **UAT testing** пройдено с маркетплейсами
-- [ ] **Performance baseline** установлен (< 1sec ingestion latency)
-- [ ] **Incident response plan** готов
-- [ ] **Team trained** на использование Admin Dashboard
-- [ ] **Greenlight** получено от архитекторов/PO
-
----
-
-## Notes
-
-- Чек-лист базируется на версии 1.0 маркетплейс-ядра
-- Для расширения (batch events, WebSocket, GraphQL) см. MARKETPLACE_CORE_README.md
-- Все события хранятся — можешь переобработать DeadLetters вручную
-- SyncCursor позволяет возобновить обработку с последней позиции при падении
+- [ ] `npm run test:backend-access`
+- [ ] `npm run test:wb-logistics`
+- [ ] `npm run test:unit-economics`
+- [ ] `npm run lint`
+- [ ] `npm run build`
+- [ ] `npm run typecheck`
+- [ ] Legacy ingestion route reference search has no active contract matches.
+- [ ] Admin scheduling and sync code has no LLM-invocation usage.
+- [ ] Browser-owned WB scheduler names no longer appear under `src`.

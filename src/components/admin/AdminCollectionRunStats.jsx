@@ -4,13 +4,14 @@ import { base44 } from '@/api/base44Client';
 import { BarChart, Bar, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 import { Card } from '@/components/ui/card';
 import { TrendingUp } from 'lucide-react';
+import { normalizeIngestionRuns } from '@/lib/ingestionRunCounters';
 
 export default function AdminCollectionRunStats() {
   const { data: allRuns = [] } = useQuery({
     queryKey: ['ingestion-runs-all'],
     queryFn: async () => {
       try {
-        return await base44.entities.IngestionRun.list('-created_date', 100);
+        return normalizeIngestionRuns(await base44.entities.IngestionRun.list('-created_date', 100));
       } catch {
         return [];
       }

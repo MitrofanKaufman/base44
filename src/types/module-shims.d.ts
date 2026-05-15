@@ -29,6 +29,9 @@ declare module '@/components/ui/*' {
   export const CardHeader: ComponentType<any>;
   export const CardTitle: ComponentType<any>;
   export const Checkbox: ComponentType<any>;
+  export const Collapsible: ComponentType<any>;
+  export const CollapsibleContent: ComponentType<any>;
+  export const CollapsibleTrigger: ComponentType<any>;
   export const Dialog: ComponentType<any>;
   export const DialogContent: ComponentType<any>;
   export const DialogDescription: ComponentType<any>;

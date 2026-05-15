@@ -1,7 +1,9 @@
 import dotenv from 'dotenv';
-import { createJobWorker } from './queue.js';
+import { createJobWorker, jobQueue } from './queue.js';
 import { getPool } from './db.js';
 import { ensureAdminTables, processDueBroadcastSchedules } from './admin-service.js';
+import { ensureSystemScheduledTaskTables, processDueSystemTasks } from './system-scheduled-tasks.js';
+import { markWorkerStopped, recordWorkerHeartbeat } from './scheduler-service.js';
 import {
   ensureWildberriesCollectionTables,
   processWbCollectProductJob,
@@ -12,6 +14,21 @@ dotenv.config();
 const pool = getPool();
 await ensureWildberriesCollectionTables(pool);
 await ensureAdminTables(pool);
+await ensureSystemScheduledTaskTables(pool);
+
+async function sendWorkerHeartbeat() {
+  try {
+    await recordWorkerHeartbeat(pool, {
+      queueName: 'base44-jobs',
+      metadata: {
+        pid: process.pid,
+        uptimeSeconds: Math.floor(process.uptime()),
+      },
+    });
+  } catch (error) {
+    console.error('[worker] heartbeat failed', error);
+  }
+}
 
 async function runBroadcastScheduler() {
   try {
@@ -21,6 +38,17 @@ async function runBroadcastScheduler() {
     }
   } catch (error) {
     console.error('[worker] broadcast scheduler failed', error);
+  }
+}
+
+async function runSystemTaskScheduler() {
+  try {
+    const results = await processDueSystemTasks(pool, { jobQueue });
+    if (results.length > 0) {
+      console.log(`[worker] processed ${results.length} system scheduled task(s)`);
+    }
+  } catch (error) {
+    console.error('[worker] system task scheduler failed', error);
   }
 }
 
@@ -56,8 +84,28 @@ const broadcastSchedulerInterval = setInterval(
 broadcastSchedulerInterval.unref();
 await runBroadcastScheduler();
 
-process.on('SIGINT', async () => {
+const systemTaskSchedulerInterval = setInterval(
+  runSystemTaskScheduler,
+  Number(process.env.SYSTEM_TASK_INTERVAL_MS || 60_000),
+);
+systemTaskSchedulerInterval.unref();
+await runSystemTaskScheduler();
+
+const workerHeartbeatInterval = setInterval(
+  sendWorkerHeartbeat,
+  Number(process.env.WORKER_HEARTBEAT_INTERVAL_MS || 30_000),
+);
+workerHeartbeatInterval.unref();
+await sendWorkerHeartbeat();
+
+async function shutdownWorker() {
   clearInterval(broadcastSchedulerInterval);
+  clearInterval(systemTaskSchedulerInterval);
+  clearInterval(workerHeartbeatInterval);
+  await markWorkerStopped(pool).catch(() => {});
   await worker.close();
   process.exit(0);
-});
+}
+
+process.on('SIGINT', shutdownWorker);
+process.on('SIGTERM', shutdownWorker);

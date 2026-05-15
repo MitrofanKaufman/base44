@@ -160,7 +160,7 @@ export default function ExportButton({ form, result, productName, versionName })
     <div className="relative">
       <button
         onClick={() => setOpen(o => !o)}
-        className="flex items-center gap-1.5 px-3 py-1.5 rounded-md border border-border bg-card hover:bg-muted transition-colors text-sm font-medium text-foreground shadow-warm-sm"
+        className="flex w-full items-center justify-center gap-1.5 px-3 py-1.5 rounded-md border border-border bg-card hover:bg-muted transition-colors text-sm font-medium text-foreground shadow-warm-sm sm:w-auto"
       >
         <Download className="w-3.5 h-3.5" />
         Экспорт

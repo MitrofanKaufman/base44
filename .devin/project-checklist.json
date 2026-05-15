@@ -1,0 +1,77 @@
+{
+  "projectChecklist": {
+    "setup": [
+      "Клонировать репозиторий",
+      "npm install",
+      "Создать .env.local с переменными окружения",
+      "docker compose up -d postgres redis",
+      "cd backend && npm install",
+      "npm run dev (frontend)",
+      "cd backend && npm run dev (backend)"
+    ],
+    "development": [
+      "Использовать алиасы @/ для импортов из src/",
+      "Следовать структуре компонентов в src/components/",
+      "Добавлять тесты для новых функций",
+      "Проверять типы: npm run typecheck",
+      "Проверять линтер: npm run lint"
+    ],
+    "testing": [
+      "Unit economics: npm run test:unit-economics",
+      "Backend access: npm run test:backend-access",
+      "Wildberries logistics: npm run test:wb-logistics",
+      "Wildberries collector: npm run test:wb-collector"
+    ],
+    "deployment": [
+      "npm run build",
+      "Проверить переменные окружения для production",
+      "docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --build",
+      "Настроить CORS_ORIGIN",
+      "Настроить JWT_SECRET и POSTGRES_PASSWORD"
+    ],
+    "maintenance": [
+      "Регулярно обновлять зависимости",
+      "Проверять security updates",
+      "Обновлять документацию AGENTS.md",
+      "Следить за изменениями в Base44 SDK"
+    ]
+  },
+  "troubleshooting": {
+    "frontend": {
+      "problem": "Frontend не запускается",
+      "solutions": [
+        "Проверить npm install",
+        "Проверить переменные окружения в .env.local",
+        "Проверить запущен ли backend",
+        "Очистить кэш: rm -rf node_modules/.vite"
+      ]
+    },
+    "backend": {
+      "problem": "Backend не запускается",
+      "solutions": [
+        "Проверить Docker контейнеры: docker compose ps",
+        "Проверить подключение к PostgreSQL",
+        "Проверить переменные окружения",
+        "Проверить логи в backend/"
+      ]
+    },
+    "tests": {
+      "problem": "Тесты падают",
+      "solutions": [
+        "Убедиться что Docker контейнеры запущены",
+        "Проверить миграции базы данных",
+        "Проверить переменные окружения для тестов",
+        "Запустить тесты по отдельности для диагностики"
+      ]
+    },
+    "build": {
+      "problem": "Сборка не проходит",
+      "solutions": [
+        "npm run typecheck",
+        "npm run lint",
+        "Проверить импорты и алиасы",
+        "Очистить dist папку"
+      ]
+    }
+  }
+}

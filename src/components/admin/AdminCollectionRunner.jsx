@@ -9,18 +9,14 @@ import { Textarea } from '@/components/ui/textarea';
 import { Checkbox } from '@/components/ui/checkbox';
 import AdminCollectionRunStats from './AdminCollectionRunStats';
 import RunDetailsModal from './RunDetailsModal';
+import {
+  INGESTION_STAGES,
+  normalizeIngestionRun,
+  normalizeIngestionRuns,
+  readRunCounters,
+} from '@/lib/ingestionRunCounters';
 
-const STAGES = [
-  'validate-input',
-  'collect-marketplace-data',
-  'normalize-events',
-  'save-raw-frames',
-  'save-events',
-  'update-snapshots',
-  'calculate-unit-economics',
-  'verify-results',
-  'build-report'
-];
+const STAGES = INGESTION_STAGES;
 
 function StageIcon({ status }) {
   if (status === 'completed') return <CheckCircle className="w-4 h-4 text-success" />;
@@ -53,14 +49,18 @@ export default function AdminCollectionRunner() {
 
   const { data: currentRun } = useQuery({
     queryKey: ['ingestionRun', currentRunId],
-    queryFn: () => currentRunId ? base44.entities.IngestionRun.read(currentRunId) : null,
+    queryFn: async () => {
+      if (!currentRunId) return null;
+      return normalizeIngestionRun(await base44.entities.IngestionRun.read(currentRunId));
+    },
     refetchInterval: currentRunId ? 1000 : false,
     enabled: !!currentRunId
   });
+  const currentCounters = currentRun ? readRunCounters(currentRun) : readRunCounters();
 
   const { data: recentRuns = [] } = useQuery({
     queryKey: ['recentRuns'],
-    queryFn: () => base44.entities.IngestionRun.list('-updated_date', 10),
+    queryFn: async () => normalizeIngestionRuns(await base44.entities.IngestionRun.list('-updated_date', 10)),
     refetchInterval: 3000
   });
 
@@ -382,10 +382,10 @@ export default function AdminCollectionRunner() {
           {/* Счетчики */}
           <div className="grid grid-cols-2 md:grid-cols-4 gap-2 mb-4">
             {[
-              { label: 'Events', value: currentRun.counters?.eventCount || 0 },
-              { label: 'Raw Frames', value: currentRun.counters?.rawFrameCount || 0 },
-              { label: 'Prod Snapshots', value: currentRun.counters?.productSnapshotCount || 0 },
-              { label: 'Unit Economics', value: currentRun.counters?.unitEconomicsCount || 0 }
+              { label: 'Events', value: currentCounters.eventCount },
+              { label: 'Raw Frames', value: currentCounters.rawFrameCount },
+              { label: 'Prod Snapshots', value: currentCounters.productSnapshotCount },
+              { label: 'Unit Economics', value: currentCounters.unitEconomicsCount }
             ].map(({ label, value }) => (
               <div key={label} className="bg-secondary/50 rounded p-2 text-center">
                 <div className="text-xs text-muted-foreground">{label}</div>
@@ -514,7 +514,7 @@ export default function AdminCollectionRunner() {
                   <td 
                     className="py-2 px-2 text-xs cursor-pointer hover:bg-secondary/70"
                     onClick={() => setSelectedRunForDetails(run)}
-                  >{run.counters?.eventCount || 0}</td>
+                  >{readRunCounters(run).eventCount}</td>
                 </tr>
               ))}
             </tbody>

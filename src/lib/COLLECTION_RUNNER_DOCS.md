@@ -326,14 +326,14 @@
 
 ---
 
-## API endpoints (для разработчиков)
+## Programmatic control (для разработчиков)
 
-Эти endpoints доступны также программно:
+Collection Runner остается admin/demo-инструментом и управляется через `CollectionRunPipelineService`, а production sync выполняется backend scheduler endpoints `/api/admin/scheduled-tasks`:
 
-- `POST /functions/admin-collection-runner-start` — запуск прогона
-- `GET /functions/admin-collection-runner-status` — статус и мониторинг
-- `POST /functions/admin-collection-runner-cancel` — отмена прогона
-- `POST /functions/admin-collection-runner-retry-errors` — повтор ошибок
+- `CollectionRunPipelineService.start(request)` — запуск прогона
+- `CollectionRunPipelineService.status(runId)` — статус и мониторинг
+- `CollectionRunPipelineService.cancel(runId)` — отмена прогона
+- `CollectionRunPipelineService.retryErrors(runId)` — повтор ошибок
 
 Подробно см. в разделе "API" админ-панели.
 

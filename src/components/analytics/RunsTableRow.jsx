@@ -1,5 +1,6 @@
 import { Play, Square, RotateCcw, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { readRunCounters } from '@/lib/ingestionRunCounters';
 
 const StatusBadge = ({ status }) => {
   const styles = {
@@ -19,6 +20,7 @@ const StatusBadge = ({ status }) => {
 };
 
 export default function RunsTableRow({ run, onStart, onCancel, onRetry, onDelete }) {
+  const counters = readRunCounters(run);
   return (
     <tr className="border-b border-border/50 hover:bg-secondary/30 transition-colors">
       <td className="py-3 px-3 text-xs">{new Date(run.startedAt).toLocaleString('ru-RU')}</td>
@@ -27,8 +29,8 @@ export default function RunsTableRow({ run, onStart, onCancel, onRetry, onDelete
       <td className="py-3 px-3">
         <StatusBadge status={run.status} />
       </td>
-      <td className="py-3 px-3 text-xs font-semibold">{run.counters?.eventCount || 0}</td>
-      <td className="py-3 px-3 text-xs font-semibold text-destructive">{run.counters?.deadLetterCount || 0}</td>
+      <td className="py-3 px-3 text-xs font-semibold">{counters.eventCount}</td>
+      <td className="py-3 px-3 text-xs font-semibold text-destructive">{counters.deadLetterCount}</td>
       <td className="py-3 px-3 text-xs">{((run.durationMs || 0) / 1000).toFixed(2)}</td>
       <td className="py-3 px-3">
         <div className="flex gap-1">

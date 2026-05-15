@@ -1,0 +1,36 @@
+{
+  "mcpServers": {
+    "filesystem": {
+      "enabled": true,
+      "description": "Доступ к файловой системе для чтения и записи файлов"
+    },
+    "git": {
+      "enabled": true,
+      "description": "Git операции для контроля версий"
+    },
+    "memory": {
+      "enabled": true,
+      "description": "Память агента для контекста между сессиями"
+    },
+    "playwright": {
+      "enabled": false,
+      "description": "Тестирование UI с Playwright (включить при необходимости)",
+      "note": "Требует установки playwright dependencies"
+    },
+    "pinecone": {
+      "enabled": false,
+      "description": "Векторная база данных Pinecone (включить при необходимости)",
+      "note": "Требует API ключ Pinecone"
+    }
+  },
+  "projectSpecific": {
+    "wildberries": {
+      "apiTests": true,
+      "description": "Тесты Wildberries API доступны через npm run test:wb-*"
+    },
+    "docker": {
+      "services": ["postgres", "redis"],
+      "description": "Docker контейнеры для разработки"
+    }
+  }
+}

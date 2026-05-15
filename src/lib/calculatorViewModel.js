@@ -1,4 +1,4 @@
-import { calculate } from './unitEconomics.js';
+import { calculate, calculateWbReportMetrics } from './unitEconomics.js';
 
 const COST_COLORS = {
   cogs: '#ea580c',
@@ -140,5 +140,6 @@ export function buildCalculatorViewModel(form = {}, result = calculate(form)) {
     monthly: buildMonthlyView(form, result, bep),
     costBreakdown: buildCostBreakdown(result),
     profitStructure: buildProfitStructure(result),
+    wbReport: calculateWbReportMetrics(form),
   };
 }
